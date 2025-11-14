@@ -1,0 +1,13 @@
+Kombinasi;Model;MSE;RMSE;MAE;R2
+Kombinasi A: Preprocessing Only;Linear Regression;15.105;3.886;3.467;-3.742
+Kombinasi A: Preprocessing Only;Neural Network (Nonlinear);6.408;2.531;2.234;-1.012
+Kombinasi A: Preprocessing Only;Polynomial Regression;39.258;6.266;6.016;-11.325
+Kombinasi B: Lag Only;Linear Regression;1.935;1.391;1.21;0.393
+Kombinasi B: Lag Only;Neural Network (Nonlinear);3.234;1.798;1.337;-0.015
+Kombinasi B: Lag Only;Polynomial Regression;2.325;1.525;1.221;0.27
+Kombinasi C: Lag + Musiman;Linear Regression;4.074;2.018;1.819;-0.279
+Kombinasi C: Lag + Musiman;Neural Network (Nonlinear);3.35;1.83;1.641;-0.052
+Kombinasi C: Lag + Musiman;Polynomial Regression;3.513;1.874;1.677;-0.103
+Kombinasi D: Lag + Musiman + Rolling;Linear Regression;4.797;2.19;1.916;-0.506
+Kombinasi D: Lag + Musiman + Rolling;Neural Network (Nonlinear);3.159;1.777;1.401;0.008
+Kombinasi D: Lag + Musiman + Rolling;Polynomial Regression;4.454;2.11;1.914;-0.398

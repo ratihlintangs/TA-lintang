@@ -1,0 +1,160 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures
+from sklearn.pipeline import make_pipeline
+from sklearn.neural_network import MLPRegressor
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import warnings
+warnings.filterwarnings('ignore')
+
+# ============ CONFIGURATION ============
+file_excel = "kumpulan1.xlsx"
+target_col = "Tavg"  # Kolom target suhu
+tanggal_col = "TANGGAL"  # GANTI jika nama kolom tanggal di Excel beda, misalnya 'tgl' atau 'Date'
+
+lags = [7, 14, 30]
+
+# ============ 1. LOAD DATA ============
+df = pd.read_excel(file_excel)
+
+# --- Cek nama kolom ---
+print("Kolom di Excel:", df.columns.tolist())
+
+# --- Pastikan kolom tanggal ada ---
+if tanggal_col not in df.columns:
+    raise ValueError(f"\n>>> ERROR: Kolom '{tanggal_col}' tidak ditemukan di file '{file_excel}'.\n"
+                     f"Silakan cek nama kolom tanggal di Excel, contoh: 'tgl', 'date', dst.\n")
+
+df[tanggal_col] = pd.to_datetime(df[tanggal_col])
+df = df.sort_values(tanggal_col)
+
+# Bersihkan nilai kosong
+df[target_col] = df[target_col].replace('-', np.nan).astype(float)
+df = df.dropna(subset=[target_col]).reset_index(drop=True)
+
+# ============ 2. FEATURE ENGINEERING ============
+df['dayofyear'] = df[tanggal_col].dt.dayofyear
+df['sin_doy'] = np.sin(2 * np.pi * df['dayofyear'] / 365)
+df['cos_doy'] = np.cos(2 * np.pi * df['dayofyear'] / 365)
+
+# Tambah lag features
+for lag in lags:
+    df[f'lag_{lag}'] = df[target_col].shift(lag)
+
+df = df.dropna().reset_index(drop=True)
+
+# Features & target
+feature_cols = [f'lag_{lag}' for lag in lags] + ['sin_doy', 'cos_doy']
+X = df[feature_cols].values
+y = df[target_col].values
+
+# Scale X
+scaler = MinMaxScaler()
+X_scaled = scaler.fit_transform(X)
+
+# ============ 3. SPLIT DATA ============
+train_size = len(X_scaled) - 7
+X_train, X_test = X_scaled[:train_size], X_scaled[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# ============ 4. MODELS ============
+
+# Linear Regression
+model_lr = LinearRegression()
+model_lr.fit(X_train, y_train)
+
+# Polynomial Regression (degree=2)
+model_poly = make_pipeline(PolynomialFeatures(degree=2), LinearRegression())
+model_poly.fit(X_train, y_train)
+
+# Neural Network TUNING
+param_grid = {
+    'hidden_layer_sizes': [(50,), (100,), (100,50), (150,100,50)],
+    'alpha': [0.0001, 0.001, 0.005],
+    'learning_rate': ['adaptive'],
+    'max_iter': [3000],
+    'early_stopping': [True]
+}
+
+grid_search = GridSearchCV(MLPRegressor(random_state=42), param_grid, cv=3, scoring='neg_mean_squared_error', n_jobs=-1)
+grid_search.fit(X_train, y_train)
+
+# Best model MLP
+best_mlp = grid_search.best_estimator_
+print(f"\n=== BEST MLP Params: {grid_search.best_params_} ===")
+
+# ============ 5. FORECAST 7 HARI KE DEPAN (Recursive) ============
+last_known = df.iloc[-7:].copy()
+
+forecast_dates = pd.date_range(df[tanggal_col].iloc[-1] + pd.Timedelta(days=1), periods=7)
+forecast_actual = [27.9, 28.7, 29.4, 29.6, 30.1, 28.8, 29.0]  # data aktual 1-7 Juni
+
+results = []
+
+lags_vals = list(last_known[target_col].values[-30:])  # untuk lag 30, ambil 30 data terakhir
+
+for d in range(7):
+    dayofyear = forecast_dates[d].dayofyear
+    sin_doy = np.sin(2 * np.pi * dayofyear / 365)
+    cos_doy = np.cos(2 * np.pi * dayofyear / 365)
+
+    feat = [
+        lags_vals[-7],
+        lags_vals[-14] if len(lags_vals) >= 14 else lags_vals[-7],
+        lags_vals[-30] if len(lags_vals) >= 30 else lags_vals[-7],
+        sin_doy, cos_doy
+    ]
+    feat_scaled = scaler.transform([feat])
+
+    pred_lr = model_lr.predict(feat_scaled)[0]
+    pred_poly = model_poly.predict(feat_scaled)[0]
+    pred_nn = best_mlp.predict(feat_scaled)[0]
+
+    results.append([forecast_dates[d], forecast_actual[d], pred_lr, pred_nn, pred_poly])
+
+    # Update lags
+    lags_vals.append(pred_lr)  # atau pakai pred_nn
+
+# ============ 6. EVALUATION ============
+df_results = pd.DataFrame(results, columns=['Tanggal', 'Aktual', 'Pred_Linear', 'Pred_Nonlinear', 'Pred_Polynomial'])
+
+def eval_model(y_true, y_pred):
+    mse = mean_squared_error(y_true, y_pred)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    return mse, rmse, mae, r2
+
+eval_lr = eval_model(df_results['Aktual'], df_results['Pred_Linear'])
+eval_nn = eval_model(df_results['Aktual'], df_results['Pred_Nonlinear'])
+eval_poly = eval_model(df_results['Aktual'], df_results['Pred_Polynomial'])
+
+# ============ 7. PRINT HASIL ============
+print("\n=== TABEL HASIL PREDIKSI 1–7 JUNI 2025 ===")
+print(df_results)
+
+print("\n=== Evaluasi Model: Linear Regression ===")
+print(f"MSE: {eval_lr[0]:.3f}, RMSE: {eval_lr[1]:.3f}, MAE: {eval_lr[2]:.3f}, R²: {eval_lr[3]:.3f}")
+
+print("\n=== Evaluasi Model: Neural Network (Nonlinear) ===")
+print(f"MSE: {eval_nn[0]:.3f}, RMSE: {eval_nn[1]:.3f}, MAE: {eval_nn[2]:.3f}, R²: {eval_nn[3]:.3f}")
+
+print("\n=== Evaluasi Model: Polynomial Regression ===")
+print(f"MSE: {eval_poly[0]:.3f}, RMSE: {eval_poly[1]:.3f}, MAE: {eval_poly[2]:.3f}, R²: {eval_poly[3]:.3f}")
+
+# ============ 8. PLOT HASIL ============
+plt.figure(figsize=(10,6))
+plt.plot(df_results['Tanggal'], df_results['Aktual'], label='Aktual', marker='o')
+plt.plot(df_results['Tanggal'], df_results['Pred_Linear'], label='Pred Linear', marker='o')
+plt.plot(df_results['Tanggal'], df_results['Pred_Nonlinear'], label='Pred Neural Net', marker='o')
+plt.plot(df_results['Tanggal'], df_results['Pred_Polynomial'], label='Pred Polynomial', marker='o')
+plt.title('Prediksi Tavg (1–7 Juni 2025)')
+plt.xlabel('Tanggal')
+plt.ylabel('Tavg')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()

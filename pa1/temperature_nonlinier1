@@ -1,0 +1,73 @@
+import pandas as pd
+import numpy as np
+from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import matplotlib.pyplot as plt
+import math
+
+# === 1. BACA DATA ===
+file_path = "data 3 bulan1.xlsx"  # Pastikan file ada di folder yang sama
+df = pd.read_excel(file_path, sheet_name='Sheet1', header=None)
+df.columns = ['Tavg']
+data = df['Tavg'].values
+
+# === 2. SIAPKAN DATA LAG (windowed input) ===
+def create_lagged_features(data, lag=7):
+    X, y = [], []
+    for i in range(lag, len(data)):
+        X.append(data[i-lag:i])
+        y.append(data[i])
+    return np.array(X), np.array(y)
+
+lag = 7
+X, y = create_lagged_features(data, lag)
+
+# === 3. LATIH MODEL NON-LINIER (MLP) ===
+model = MLPRegressor(hidden_layer_sizes=(50, 25), max_iter=1000, random_state=42)
+model.fit(X, y)
+
+# === 4. PREDIKSI 7 HARI PERTAMA APRIL ===
+# Mulai dari akhir data Maret
+history = list(data[-lag:])
+predictions = []
+
+for _ in range(7):
+    input_data = np.array(history[-lag:]).reshape(1, -1)
+    pred = model.predict(input_data)[0]
+    predictions.append(pred)
+    history.append(pred)
+
+# Tampilkan hasil prediksi
+print("=== Prediksi Tavg Non-Linier (7 Hari Pertama April) ===")
+for i, val in enumerate(predictions, 1):
+    print(f"Hari {i}: {val:.2f}")
+
+# === 5. EVALUASI ===
+actual_april = [29.2, 29.5, 29.4, 28.6, 28.6, 28.3, 29.7]
+
+mse = mean_squared_error(actual_april, predictions)
+rmse = math.sqrt(mse)
+mae = mean_absolute_error(actual_april, predictions)
+r2 = r2_score(actual_april, predictions)
+
+print("\n=== Evaluasi Model ===")
+print(f"MSE  : {mse:.4f}")
+print(f"RMSE : {rmse:.4f}")
+print(f"MAE  : {mae:.4f}")
+print(f"R²   : {r2:.4f}")
+
+# === 6. VISUALISASI ===
+plt.figure(figsize=(10, 6))
+days = np.arange(1, 8)
+
+plt.plot(days, actual_april, marker='o', linestyle='-', label='Aktual', color='blue')
+plt.plot(days, predictions, marker='o', linestyle='--', label='Prediksi MLP', color='green')
+
+plt.title("Prediksi vs Aktual Tavg (Non-Linier Autoregressive - MLP)")
+plt.xlabel("Hari di Bulan April")
+plt.ylabel("Tavg (°C)")
+plt.xticks(days)
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
