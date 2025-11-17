@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+sqlalchemy
+pandas
+scikit-learn # Untuk placeholder model AR
+numpy # Diperlukan untuk manipulasi data
+statsmodels # Pustaka utama untuk model AR
+python-multipart # DIPERLUKAN oleh Starlette StaticFiles

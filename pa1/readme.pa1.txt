@@ -9,3 +9,5 @@ ps - ps - tekanan udara
 hasil evaluasi ada di masing-masing folder 1-12 menandakan 3 bulan ya
 
 
+http://127.0.0.1:8000/
+http://127.0.0.1:8000/docs
