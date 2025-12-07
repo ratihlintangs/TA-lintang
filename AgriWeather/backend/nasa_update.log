@@ -1,2 +1,22 @@
 [2025-11-15 10:57:16] 📁 Menggunakan database: c:\Users\ratih\Documents\GitHub\TA-lintang\AgriWeather\backend\data\weather_data.db
 [2025-11-15 10:57:16] ⏸ Tidak ada data baru.
+2025-12-03 18:39:03.288427 - 🔄 Mengambil data NASA dari 20251114 sampai 20251201...
+2025-12-03 18:39:05.439119 - ✔ Data 2025-11-14 ditambahkan.
+2025-12-03 18:39:05.441520 - ✔ Data 2025-11-15 ditambahkan.
+2025-12-03 18:39:05.443834 - ✔ Data 2025-11-16 ditambahkan.
+2025-12-03 18:39:05.444585 - ✔ Data 2025-11-17 ditambahkan.
+2025-12-03 18:39:05.445496 - ✔ Data 2025-11-18 ditambahkan.
+2025-12-03 18:39:05.446362 - ✔ Data 2025-11-19 ditambahkan.
+2025-12-03 18:39:05.447244 - ✔ Data 2025-11-20 ditambahkan.
+2025-12-03 18:39:05.448270 - ✔ Data 2025-11-21 ditambahkan.
+2025-12-03 18:39:05.449331 - ✔ Data 2025-11-22 ditambahkan.
+2025-12-03 18:39:05.450087 - ✔ Data 2025-11-23 ditambahkan.
+2025-12-03 18:39:05.450883 - ✔ Data 2025-11-24 ditambahkan.
+2025-12-03 18:39:05.451465 - ✔ Data 2025-11-25 ditambahkan.
+2025-12-03 18:39:05.451936 - ✔ Data 2025-11-26 ditambahkan.
+2025-12-03 18:39:05.453429 - ✔ Data 2025-11-27 ditambahkan.
+2025-12-03 18:39:05.453840 - ✔ Data 2025-11-28 ditambahkan.
+2025-12-03 18:39:05.456619 - ✔ Data 2025-11-29 ditambahkan.
+2025-12-03 18:39:05.458332 - ✔ Data 2025-11-30 ditambahkan.
+2025-12-03 18:39:05.459409 - ⚠️ 2025-12-01 dilewati (data belum lengkap / masih -999).
+2025-12-03 18:39:05.466742 - ✅ Update selesai! 17 data baru ditambahkan.

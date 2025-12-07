@@ -7,3 +7,4 @@ scikit-learn # Untuk placeholder model AR
 numpy # Diperlukan untuk manipulasi data
 statsmodels # Pustaka utama untuk model AR
 python-multipart # DIPERLUKAN oleh Starlette StaticFiles
+psycopg2-binary # Connector untuk PostgreSQL. Ganti ini jika Anda menggunakan DB lain (misal: mysqlclient)

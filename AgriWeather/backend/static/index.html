@@ -3,296 +3,290 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriWeather - Prediksi Cuaca Pertanian</title>
-    <!-- Memuat Tailwind CSS CDN -->
+    <title>AgriWeather - Ramalan Cuaca 7 Hari</title>
+    <!-- Muat Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Memuat Lucide Icons untuk ikon cuaca dan navigasi -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Konfigurasi Tema Tailwind (Opsional, tapi bagus untuk konsistensi) -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#059669', // Warna hijau untuk pertanian
+                        'secondary': '#34D399',
+                        'background': '#F9FAFB',
+                        'card': '#FFFFFF',
+                        'accent': '#10B981', // Warna tambahan untuk highlight
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
     <style>
-        /* Konfigurasi Font Inter */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6; /* Warna latar belakang abu-abu muda */
-        }
-        /* Style untuk tablet dan desktop: batasi lebar konten utama */
-        .container {
-            max-width: 900px;
-        }
-        /* Styling untuk sel header tabel */
-        .header-cell {
-            background-color: #d1d5db; /* Abu-abu sedang untuk header */
-            color: #1f2937; /* Teks gelap */
-            font-weight: 600;
-            padding: 0.75rem 0.5rem;
-            text-align: center;
-        }
-        /* Styling untuk sel data tabel */
-        .data-cell {
-            background-color: #e5e7eb; /* Abu-abu sangat muda untuk data */
-            color: #374151; /* Teks abu-abu gelap */
-            padding: 0.75rem 0.5rem;
-            text-align: center;
-            font-size: 0.9rem;
-        }
+        /* Menggunakan font Inter */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     </style>
 </head>
-<body class="p-4 md:p-8 min-h-screen">
+<body class="bg-background min-h-screen font-sans p-4 sm:p-8">
 
-    <div id="app" class="container mx-auto">
-        <!-- Main Card Area -->
-        <div class="bg-stone-300 p-4 sm:p-6 rounded-3xl shadow-xl">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header dan Lokasi -->
+        <header class="text-center mb-10 p-6 bg-white rounded-xl shadow-lg">
+            <h1 class="text-4xl font-bold text-primary mb-2">AgriWeather</h1>
+            <p class="text-gray-600 text-lg">Ramalan Cuaca Harian untuk 7 Hari ke Depan (Model MLP Time Series)</p>
+            <p class="text-sm font-semibold text-accent mt-3">
+                📍 Lokasi Prediksi: Stasiun Klimatologi Karangploso (BMKG)
+            </p>
+        </header>
 
-            <!-- Header Title -->
-            <header class="text-center mb-6">
-                <h1 class="text-3xl font-bold text-gray-800">AgriWeather</h1>
-                <p id="today-date" class="text-lg text-gray-700 mt-1">Hari Ini: Loading...</p>
-            </header>
+        <!-- Container Ramalan Cuaca -->
+        <div class="space-y-10">
 
-            <!-- Current Day Overview (Top Section) -->
-            <div id="current-weather" class="bg-gray-200 p-6 rounded-2xl shadow-inner mb-6 flex flex-col sm:flex-row items-center justify-between relative">
+            <!-- Bagian Ramalan (Forecast) -->
+            <section id="forecast-section">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4">Ramalan 7 Hari Ke Depan</h2>
+                <div id="loading-message" class="text-center p-6 bg-blue-100 text-blue-800 rounded-lg shadow-md">
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Memuat ramalan cuaca 7 hari...
+                </div>
                 
-                <!-- Navigation Arrows (Placeholder) -->
-                <button class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-600 hover:text-gray-800 transition duration-150 p-2 sm:hidden">
-                    <i data-lucide="arrow-left" class="w-6 h-6"></i>
-                </button>
-                <button class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-600 hover:text-gray-800 transition duration-150 p-2 sm:hidden">
-                    <i data-lucide="arrow-right" class="w-6 h-6"></i>
-                </button>
-
-                <!-- Icon and Temperature -->
-                <div class="flex items-center space-x-4 mb-4 sm:mb-0">
-                    <!-- Icon placeholder (Kita simpan ikon, meski fokus pada data) -->
-                    <div id="current-icon" class="text-6xl text-yellow-500">
-                         <i data-lucide="sun" class="w-16 h-16"></i>
-                    </div>
-                    <div class="flex items-start">
-                        <span id="current-temp" class="text-6xl font-extrabold text-gray-800">--</span>
-                        <span class="text-4xl text-gray-600 font-bold mt-1">°C</span>
-                    </div>
-                    <!-- Kita ganti deskripsi cuaca menjadi Tekanan Sistem -->
-                    <span id="current-pressure" class="text-xl text-gray-700 font-medium">Tekanan: -- hPa</span>
+                <div id="error-message" class="hidden text-center p-6 bg-red-100 text-red-800 rounded-lg shadow-md">
+                    ❌ Gagal memuat data ramalan. Pastikan *backend* (FastAPI) sudah berjalan dan model (`.pkl`) tersedia.
                 </div>
 
-                <!-- Details (Humidity, Wind Speed) -->
-                <div class="text-lg text-gray-700 space-y-1 sm:text-right">
-                    <p>Kelembapan: <span id="current-humidity" class="font-semibold">--%</span></p>
-                    <p>Kecepatan Angin: <span id="current-wind" class="font-semibold">-- Km/j</span></p>
+                <!-- Grid Kartu Prediksi: 3 kolom di desktop, 2 di tablet, 1 di mobile -->
+                <div id="forecast-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Kartu-kartu prediksi akan dirender di sini -->
                 </div>
-            </div>
+            </section>
 
-            <!-- Loading State -->
-            <div id="loading-spinner" class="text-center p-8 hidden">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-                <p class="mt-4 text-gray-700">Mengambil dan memproses prediksi dari 4 model AR...</p>
-            </div>
-            
-            <!-- Error State -->
-            <div id="error-message" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-lg hidden" role="alert">
-                <p class="font-bold">Gagal Memuat Data</p>
-                <p id="error-detail">Terjadi kesalahan saat menghubungi API. Pastikan backend Anda berjalan di http://127.0.0.1:8000.</p>
-            </div>
-
-            <!-- Forecast Table (Bottom Section) -->
-            <div id="forecast-table-container" class="overflow-x-auto shadow-lg rounded-xl border border-gray-300 hidden">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr id="table-day-headers">
-                            <th class="header-cell sticky left-0 z-10 w-[100px] text-xs sm:text-base">Minggu (Tanggal)</th>
-                            <!-- Days will be dynamically inserted here -->
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr id="row-temp">
-                            <td class="header-cell sticky left-0 z-10 font-normal text-sm sm:text-base bg-stone-300">Suhu (°C)</td>
-                            <!-- Data cells -->
-                        </tr>
-                        <!-- BARIS BARU: Tekanan Sistem -->
-                        <tr id="row-pressure">
-                            <td class="header-cell sticky left-0 z-10 font-normal text-sm sm:text-base bg-stone-300">Tekanan (hPa)</td>
-                            <!-- Data cells -->
-                        </tr>
-                        <tr id="row-humidity">
-                            <td class="header-cell sticky left-0 z-10 font-normal text-sm sm:text-base bg-stone-300">Kelembapan (%)</td>
-                            <!-- Data cells -->
-                        </tr>
-                        <tr id="row-wind">
-                            <td class="header-cell sticky left-0 z-10 font-normal text-sm sm:text-base bg-stone-300">Kecepatan Angin (Km/j)</td>
-                            <!-- Data cells -->
-                        </tr>
-                    </tbody>
-                </table>
+            <!-- Bagian Evaluasi Model -->
+            <div id="evaluation-section" class="hidden p-6 bg-white rounded-xl shadow-lg">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Evaluasi Kinerja Model (RMSE/MAE)</h2>
+                <div id="evaluation-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <!-- Kartu evaluasi akan dirender di sini -->
+                </div>
             </div>
 
         </div>
-        
-        <!-- Footer / Model Information -->
-        <footer class="text-center mt-6 text-sm text-gray-600">
-            <p>Aplikasi TA AgriWeather. Model Prediksi: <span id="model-info">4x AR Model V1.0 (Lags=5)</span></p>
-        </footer>
-
     </div>
 
     <script>
-        // Inisialisasi Lucide Icons setelah konten dimuat
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-            fetchWeatherData();
-        });
-
-        const API_URL = 'http://127.0.0.1:8000/weather/predict/';
-        const loadingSpinner = document.getElementById('loading-spinner');
+        // Gunakan port 8000 (default FastAPI)
+        const API_BASE_URL = 'http://localhost:8000'; 
+        // Menggunakan endpoint prediksi
+        const FORECAST_ENDPOINT = `${API_BASE_URL}/weather/predict/`; 
+        
+        const forecastGrid = document.getElementById('forecast-grid');
+        const loadingMessage = document.getElementById('loading-message');
         const errorMessage = document.getElementById('error-message');
-        const forecastTableContainer = document.getElementById('forecast-table-container');
-        const modelInfoSpan = document.getElementById('model-info');
+        const evaluationSection = document.getElementById('evaluation-section');
+        const evaluationCards = document.getElementById('evaluation-cards');
 
-        // Fungsi untuk menentukan hari dalam seminggu dalam bahasa Indonesia
-        const daysInIndonesian = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        /**
+         * Fungsi untuk memformat tanggal menjadi 'Hari, Tanggal Bulan Tahun'
+         */
+        function formatTanggal(dateString) {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const date = new Date(dateString);
+            // Tambahkan 7 jam untuk mengimbangi perbedaan zona waktu (asumsi WIB/GMT+7)
+            date.setHours(date.getHours() + 7); 
+            return date.toLocaleDateString('id-ID', options);
+        }
 
-        // --- Ikon Cuaca Mock (Simulasi) ---
-        const getWeatherIconAndDescription = (temperature, humidity) => {
-            if (temperature >= 32 && humidity < 70) {
-                return { icon: 'sun', color: 'text-yellow-500' };
-            } else if (temperature >= 30 && humidity >= 80) {
-                return { icon: 'cloud-sun', color: 'text-yellow-600' };
-            } else if (temperature < 30 && humidity >= 85) {
-                return { icon: 'cloud-rain', color: 'text-blue-500' };
-            } else if (humidity > 90) {
-                 return { icon: 'cloud-lightning', color: 'text-indigo-600' };
-            } else if (temperature < 28) {
-                return { icon: 'wind', color: 'text-gray-500' };
+        /**
+         * Fungsi untuk membuat ikon berdasarkan jenis cuaca (sederhana)
+         */
+        function getWeatherIcon(temp) {
+            if (temp >= 30) {
+                return '<span class="text-5xl">☀️</span>'; // Panas
+            } else if (temp >= 24) {
+                return '<span class="text-5xl">⛅</span>'; // Cerah Berawan
             } else {
-                return { icon: 'cloud-sun', color: 'text-yellow-600' };
-            }
-        };
-
-        const renderIcon = (iconName, size = 48) => {
-            const iconElement = lucide.createIcons()[iconName];
-            if (iconElement) {
-                iconElement.setAttribute('width', size);
-                iconElement.setAttribute('height', size);
-                return iconElement.outerHTML;
-            }
-            return '';
-        };
-
-        // --- Fungsi Utama: Mengambil Data dan Merender UI ---
-        async function fetchWeatherData() {
-            loadingSpinner.classList.remove('hidden');
-            errorMessage.classList.add('hidden');
-            forecastTableContainer.classList.add('hidden');
-
-            try {
-                const response = await fetch(`${API_URL}?days_ahead=7`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const predictions = await response.json();
-
-                if (predictions.length === 0) {
-                    document.getElementById('error-detail').textContent = "API berhasil dipanggil, tetapi tidak mengembalikan data prediksi. Pastikan database Anda memiliki data historis yang cukup.";
-                    errorMessage.classList.remove('hidden');
-                    return;
-                }
-
-                // Update info model di footer (mengambil dari data pertama jika tersedia)
-                if (predictions[0] && predictions[0].model) {
-                     modelInfoSpan.textContent = predictions[0].model;
-                }
-                
-                // 1. Render Cuaca Hari Ini (Data Pertama dari Prediksi)
-                const todayData = predictions[0];
-                renderCurrentWeather(todayData);
-                
-                // 2. Render Tabel Prediksi 7 Hari
-                renderForecastTable(predictions);
-
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                document.getElementById('error-detail').textContent = `Kesalahan jaringan/server: ${error.message}. Pastikan backend FastAPI Anda berjalan di http://127.0.0.1:8000.`;
-                errorMessage.classList.remove('hidden');
-            } finally {
-                loadingSpinner.classList.add('hidden');
+                return '<span class="text-5xl">🌧️</span>'; // Dingin/Hujan (default)
             }
         }
 
-        function renderCurrentWeather(data) {
-            const today = new Date();
-            const dateStr = today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        /**
+         * Fungsi untuk merender satu kartu ramalan cuaca
+         */
+        function renderForecastCard(item, index) {
+            const icon = getWeatherIcon(item.temperature_c);
+            const formattedDate = formatTanggal(item.date);
             
-            document.getElementById('today-date').textContent = `Hari Ini: ${dateStr}`;
+            // Hari ini (index 0) akan disorot dan mengambil lebar penuh (col-span-full)
+            const isFirstDay = index === 0;
+            const bgColor = isFirstDay ? 'bg-secondary' : 'bg-card';
+            const textColor = isFirstDay ? 'text-white' : 'text-gray-800';
+            const subTextColor = isFirstDay ? 'text-gray-200' : 'text-gray-500';
+            // lg:col-span-3: Hari pertama mengambil 3 kolom penuh (lebar penuh)
+            const colSpan = isFirstDay ? 'lg:col-span-3 sm:col-span-2' : ''; 
+            const layoutClass = isFirstDay ? 'flex flex-col md:flex-row items-center justify-between' : 'flex flex-col h-full';
 
-            // Menggunakan ikon berdasarkan simulasi (jika Anda ingin mempertahankannya)
-            const { icon, color } = getWeatherIconAndDescription(data.temperature, data.humidity);
-            document.getElementById('current-icon').innerHTML = `<i data-lucide="${icon}" class="${color} w-16 h-16"></i>`;
-            
-            document.getElementById('current-temp').textContent = Math.round(data.temperature);
-            // MEMPERBARUI: Menggunakan Tekanan (Pressure) untuk slot deskripsi
-            document.getElementById('current-pressure').textContent = `Tekanan: ${data.pressure.toFixed(2)} hPa`;
-            document.getElementById('current-humidity').textContent = `${Math.round(data.humidity)}%`;
-            document.getElementById('current-wind').textContent = `${data.wind_speed.toFixed(1)} Km/j`;
-            
-            // Re-create icons for the current section
-            lucide.createIcons({ attr: 'data-lucide', classes: 'w-6 h-6', parent: document.getElementById('current-weather') });
+
+            // Layout untuk Hari Pertama (Lebih Besar, Full Row)
+            if (isFirstDay) {
+                // *** ADJUSMENT: Menggunakan grid-cols-3 untuk 3 item berjejer rapi ***
+                return `
+                    <div class="p-8 ${bgColor} rounded-xl shadow-lg transition duration-300 hover:shadow-xl transform hover:-translate-y-1 ${colSpan}">
+                        <div class="${layoutClass} w-full">
+                            <!-- Kiri: Info Hari -->
+                            <div class="md:w-1/3 text-center md:text-left mb-4 md:mb-0">
+                                <h2 class="text-3xl font-extrabold ${textColor} mb-1">${formattedDate.split(',')[0]}</h2>
+                                <p class="text-base ${subTextColor}">${formattedDate.split(',').slice(1).join(',').trim()}</p>
+                            </div>
+                            <!-- Tengah: Ikon & Suhu Besar -->
+                            <div class="md:w-1/3 text-center mb-4 md:mb-0">
+                                ${icon.replace('text-5xl', 'text-7xl')}
+                                <p class="text-5xl font-bold ${textColor} mt-2">${item.temperature_c ? item.temperature_c.toFixed(1) : '-'}°C</p>
+                                <p class="text-base ${subTextColor}">Suhu Rata-rata Prediksi</p>
+                            </div>
+                            <!-- Kanan: Detail Lain (Grid 3 Kolom) -->
+                            <div class="md:w-1/3 grid grid-cols-3 gap-4 text-sm font-medium p-4 rounded-lg ${isFirstDay ? 'bg-black/10' : 'bg-gray-100'}">
+                                
+                                <!-- Kelembapan (Kolom 1) -->
+                                <div class="${textColor} p-2 rounded-md text-center">
+                                    <span class="font-bold block text-2xl">${item.humidity_percent ? item.humidity_percent.toFixed(0) : '-'}%</span>
+                                    <span class="${subTextColor} text-xs">Kelembapan</span>
+                                </div>
+                                
+                                <!-- Tekanan (Kolom 2) -->
+                                <div class="${textColor} p-2 rounded-md text-center">
+                                    <span class="font-bold block text-2xl">${item.pressure_hpa ? item.pressure_hpa.toFixed(0) : '-'} hPa</span>
+                                    <span class="${subTextColor} text-xs">Tekanan</span>
+                                </div>
+                                
+                                <!-- Kec. Angin (Kolom 3) -->
+                                <div class="${textColor} p-2 rounded-md text-center">
+                                    <span class="font-bold block text-2xl">${item.wind_speed_kmh ? item.wind_speed_kmh.toFixed(1) : '-'} km/h</span>
+                                    <span class="${subTextColor} text-xs">Kec. Angin</span>
+                                </div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Layout untuk Hari Berikutnya (Normal Card, 6 Hari di bawah) - Tidak Berubah
+            return `
+                <div class="p-6 ${bgColor} rounded-xl shadow-md transition duration-300 hover:shadow-xl transform hover:-translate-y-0.5 forecast-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xl font-bold ${textColor} mb-1">${formattedDate.split(',')[0]}</h2>
+                            <p class="text-sm ${subTextColor}">${formattedDate.split(',').slice(1).join(',').trim()}</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            ${icon}
+                        </div>
+                    </div>
+
+                    <div class="mt-4 border-t pt-4 ${isFirstDay ? 'border-gray-500' : 'border-gray-200'}">
+                        <!-- Layout 2x2 dengan Kelembaban dan Kec. Angin di kanan -->
+                        <div class="grid grid-cols-2 gap-4 text-sm font-medium">
+                            <div class="${textColor}">
+                                <span class="font-bold block text-xl">${item.temperature_c ? item.temperature_c.toFixed(1) : '-'}°C</span>
+                                <span class="${subTextColor}">Suhu</span>
+                            </div>
+                            <div class="text-right ${textColor}"> 
+                                <span class="font-bold block text-xl">${item.humidity_percent ? item.humidity_percent.toFixed(0) : '-'}%</span>
+                                <span class="${subTextColor}">Kelembapan</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm font-medium mt-2">
+                            <div class="${textColor}">
+                                <span class="font-bold block">${item.pressure_hpa ? item.pressure_hpa.toFixed(0) : '-'} hPa</span>
+                                <span class="${subTextColor}">Tekanan</span>
+                            </div>
+                            <div class="text-right ${textColor}">
+                                <span class="font-bold block">${item.wind_speed_kmh ? item.wind_speed_kmh.toFixed(1) : '-'} km/h</span>
+                                <span class="${subTextColor}">Kec. Angin</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
-        function renderForecastTable(predictions) {
-            const headerRow = document.getElementById('table-day-headers');
-            const tempRow = document.getElementById('row-temp');
-            const pressureRow = document.getElementById('row-pressure'); // Baris Tekanan Baru
-            const humidityRow = document.getElementById('row-humidity');
-            const windRow = document.getElementById('row-wind');
-
-            // Hapus header dan data lama
-            headerRow.querySelectorAll('.day-header').forEach(el => el.remove());
-            tempRow.querySelectorAll('.data-cell').forEach(el => el.remove());
-            pressureRow.querySelectorAll('.data-cell').forEach(el => el.remove()); // Hapus data Tekanan lama
-            humidityRow.querySelectorAll('.data-cell').forEach(el => el.remove());
-            windRow.querySelectorAll('.data-cell').forEach(el => el.remove());
-            
-            // Tampilkan tabel
-            forecastTableContainer.classList.remove('hidden');
-
-            predictions.forEach((data, index) => {
-                const dateObj = new Date(data.date);
-                const dayName = daysInIndonesian[dateObj.getDay()];
-                
-                // Header Hari
-                const dayHeaderCell = document.createElement('th');
-                dayHeaderCell.className = 'header-cell day-header text-sm sm:text-base';
-                dayHeaderCell.textContent = index === 0 ? 'Hari Ini' : dayName;
-                headerRow.appendChild(dayHeaderCell);
-
-                // Suhu
-                const tempCell = document.createElement('td');
-                tempCell.className = 'data-cell';
-                tempCell.textContent = Math.round(data.temperature);
-                tempRow.appendChild(tempCell);
-
-                // Tekanan (Pressure) - BARIS BARU
-                const pressureCell = document.createElement('td');
-                pressureCell.className = 'data-cell';
-                pressureCell.textContent = data.pressure.toFixed(2);
-                pressureRow.appendChild(pressureCell);
-                
-                // Kelembapan
-                const humidityCell = document.createElement('td');
-                humidityCell.className = 'data-cell';
-                humidityCell.textContent = `${Math.round(data.humidity)}%`;
-                humidityRow.appendChild(humidityCell);
-
-                // Kecepatan Angin
-                const windCell = document.createElement('td');
-                windCell.className = 'data-cell';
-                windCell.textContent = data.wind_speed.toFixed(1);
-                windRow.appendChild(windCell);
-            });
-            
-            lucide.createIcons();
+        /**
+         * Fungsi untuk merender kartu evaluasi model
+         */
+        function renderEvaluationCard(item) {
+            return `
+                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                    <h3 class="text-lg font-semibold text-primary mb-1">${item.target.toUpperCase().replace('_', ' ')}</h3>
+                    <p class="text-xs text-gray-500">Model: ${item.model_name}</p>
+                    <p class="text-sm font-medium text-gray-700 mt-2">RMSE: <span class="font-bold">${item.rmse.toFixed(2)}</span></p>
+                    <p class="text-sm font-medium text-gray-700">MAE: <span class="font-bold">${item.mae.toFixed(2)}</span></p>
+                </div>
+            `;
         }
         
+        /**
+         * Fungsi utama untuk mengambil dan menampilkan data ramalan
+         */
+        async function fetchForecast() {
+            loadingMessage.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            forecastGrid.innerHTML = '';
+            evaluationCards.innerHTML = '';
+            evaluationSection.classList.add('hidden');
+
+            try {
+                const response = await fetch(FORECAST_ENDPOINT);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const result = await response.json(); 
+                
+                // Pengecekan sederhana bahwa data prediksi yang valid diterima
+                if (Array.isArray(result) && result.length > 0) { 
+                    loadingMessage.classList.add('hidden');
+                    
+                    // Render Prediksi Cuaca (Forecast)
+                    const forecastHTML = result.map(renderForecastCard).join('');
+                    forecastGrid.innerHTML = forecastHTML;
+                    
+                    console.log("✅ Data Ramalan Berhasil Diterima:", result);
+                    
+                } else if (result.predictions && result.predictions.length > 0) {
+                     // Jika struktur response masih mengandung 'predictions' dan 'evaluations'
+                    loadingMessage.classList.add('hidden');
+                    const forecastHTML = result.predictions.map(renderForecastCard).join('');
+                    forecastGrid.innerHTML = forecastHTML;
+
+                    if (result.evaluations && result.evaluations.length > 0) {
+                        const evaluationHTML = result.evaluations.map(renderEvaluationCard).join('');
+                        evaluationCards.innerHTML = evaluationHTML;
+                        evaluationSection.classList.remove('hidden');
+                    }
+                    console.log("✅ Data Ramalan Berhasil Diterima:", result);
+                }
+                else {
+                    throw new Error('Data prediksi kosong atau format tidak sesuai.');
+                }
+
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                loadingMessage.classList.add('hidden');
+                errorMessage.classList.remove('hidden');
+                errorMessage.textContent = `❌ Gagal memuat data ramalan. Detail: ${error.message}. Pastikan backend berjalan di port 8000.`;
+            }
+        }
+
+        // Jalankan fungsi saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchForecast();
+        });
     </script>
+
 </body>
 </html>

@@ -1,59 +1,101 @@
-from fastapi import FastAPI
-# IMPORT BARU UNTUK FILE STATIS
-from fastapi.staticfiles import StaticFiles 
-from starlette.responses import HTMLResponse 
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
+from services.utils import load_all_models_and_data, ForecastResponse, ModelEvaluation, get_latest_predictions
 
-from database import Base, engine, WeatherHistoryModel
-from routers import weather, prediction
-from fastapi.middleware.cors import CORSMiddleware 
+# ----------------------------------------------------
+# 1. SETUP APLIKASI DAN KONFIGURASI CORS
+# ----------------------------------------------------
 
-# --- Inisialisasi Aplikasi FastAPI ---
 app = FastAPI(
-    title="AGRIWEATHER API",
-    description="API untuk mengelola data historis cuaca dan prediksi AR untuk area pertanian.",
-    version="1.0.0",
+    title="AgriWeather Prediction API",
+    description="API untuk ramalan cuaca (Pressure, PS) menggunakan model Time Series MLP.",
+    version="1.0.0"
 )
 
-# --- KONFIGURASI CORS ---
+# Konfigurasi CORS (Cross-Origin Resource Sharing)
+# Ini wajib agar frontend (yang berjalan di port 5500) bisa mengakses backend (port 8000)
+origins = [
+    "http://localhost",
+    "http://localhost:5500",  # Izinkan koneksi dari server frontend Anda
+    "http://127.0.0.1:5500",  # Juga izinkan 127.0.0.1
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,              # Daftar asal yang diizinkan
+    allow_credentials=True,             # Izinkan cookies/header otentikasi
+    allow_methods=["*"],                # Izinkan semua metode (GET, POST, dll.)
+    allow_headers=["*"],                # Izinkan semua header
 )
 
 
-# --- Inisialisasi Database (Membuat tabel jika belum ada) ---
-try:
-    Base.metadata.create_all(bind=engine)
-    print("Database tables ensured.")
-except Exception as e:
-    print(f"Error creating database tables: {e}")
+# ----------------------------------------------------
+# 2. LIFESPAN EVENT HANDLERS (LOAD MODEL PADA STARTUP)
+# ----------------------------------------------------
 
-# --- Registrasi Routers ---
-app.include_router(weather.router)
-app.include_router(prediction.router)
+# Struktur untuk menyimpan hasil prediksi dan evaluasi (akan diisi di startup)
+class AppState:
+    forecast_data: List[ForecastResponse] = []
+    evaluation_data: List[ModelEvaluation] = []
 
-# --- KONFIGURASI FILE STATIS (FRONTEND) ---
-# 1. Mount StaticFiles: Melayani semua file di folder 'static'
-#    Pastikan Anda membuat folder 'static' dan memindahkan index.html ke sana.
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app_state = AppState()
 
-# 2. Endpoint Root untuk Melayani index.html
-#    Saat pengguna mengakses http://127.0.0.1:8000/, mereka akan disajikan index.html.
-@app.get("/", tags=["Root"], response_class=HTMLResponse)
-async def read_root():
-    """Endpoint root yang melayani frontend index.html."""
+@app.on_event("startup")
+async def startup_event():
+    print("INFO: Memuat model dan data pada startup...")
     try:
-        # Baca konten index.html dari folder static
-        with open("static/index.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
-        return html_content
-    except FileNotFoundError:
-        return HTMLResponse("<h1>404 Not Found</h1><p>Frontend file (static/index.html) not found. Pastikan index.html ada di folder 'static'.</p>", status_code=404)
+        # Panggil fungsi dari services.utils untuk memuat semua yang diperlukan
+        all_forecasts, all_evaluations = load_all_models_and_data()
+        
+        # Simpan data yang dimuat ke dalam state aplikasi
+        app_state.forecast_data = all_forecasts
+        app_state.evaluation_data = all_evaluations
+        print("INFO: Model dan data berhasil dimuat.")
+        
+    except Exception as e:
+        print(f"ERROR: Gagal memuat model/data saat startup: {e}")
+        # Jika model gagal dimuat, aplikasi bisa tetap berjalan tapi API akan mengembalikan error
+        # Untuk kasus ini, kita akan biarkan API endpoint yang menangani error jika data kosong.
 
 
-# --- Catatan untuk menjalankan aplikasi: ---
-# Anda dapat menjalankan aplikasi ini dari terminal menggunakan Uvicorn:
-# uvicorn app:app --reload
+@app.on_event("shutdown")
+def shutdown_event():
+    print("INFO: Aplikasi dimatikan.")
+
+
+# ----------------------------------------------------
+# 3. ENDPOINT API
+# ----------------------------------------------------
+
+@app.get("/")
+def read_root():
+    return {"message": "Selamat datang di AgriWeather API. Akses /weather/predict/ untuk data ramalan."}
+
+@app.get("/weather/predict/", response_model=ForecastResponse)
+async def get_weather_prediction():
+    """
+    Mengembalikan data ramalan cuaca (Pressure PS) dan evaluasi model.
+    Data ini dimuat sekali saat startup aplikasi.
+    """
+    if not app_state.forecast_data or not app_state.evaluation_data:
+        # Kasus ini akan terjadi jika load_all_models_and_data gagal saat startup
+        raise HTTPException(
+            status_code=503, 
+            detail="Layanan tidak tersedia. Model atau data gagal dimuat pada startup server."
+        )
+
+    # Mengembalikan data terbaru yang sudah dimuat (sesuai format ForecastResponse)
+    return {
+        "predictions": app_state.forecast_data,
+        "evaluations": app_state.evaluation_data
+    }
+
+# ----------------------------------------------------
+# 4. Fungsi Utility (untuk mendapatkan 7 hari terakhir - opsional)
+# ----------------------------------------------------
+
+# Tidak perlu membuat fungsi get_latest_predictions di sini karena data sudah ada di app_state
+# dan frontend hanya mengambil 7 hari terakhir dari array 'predictions'
