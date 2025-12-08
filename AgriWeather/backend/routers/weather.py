@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from database import get_db, WeatherHistoryModel
+
+# PERBAIKAN IMPOR: get_db dari database, WeatherHistoryModel dari models
+from database import get_db
+from models import WeatherHistoryModel 
+
 from services.utils import WeatherHistory
 from typing import List
 
@@ -24,6 +28,7 @@ def get_historical_data(
         ).offset(skip).limit(limit).all()
         
         # Mengubah data SQLAlchemy menjadi format Pydantic
+        # Catatan: Ini membutuhkan class WeatherHistory di utils.py
         return [WeatherHistory.model_validate(item) for item in data]
     except Exception as e:
         print(f"Error fetching historical data: {e}")

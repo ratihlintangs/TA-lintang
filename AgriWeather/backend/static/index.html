@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgriWeather - Ramalan Cuaca 7 Hari</title>
-    <!-- Muat Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Konfigurasi Tema Tailwind (Opsional, tapi bagus untuk konsistensi) -->
     <script>
         tailwind.config = {
             theme: {
@@ -33,7 +31,6 @@
 <body class="bg-background min-h-screen font-sans p-4 sm:p-8">
 
     <div class="max-w-6xl mx-auto">
-        <!-- Header dan Lokasi -->
         <header class="text-center mb-10 p-6 bg-white rounded-xl shadow-lg">
             <h1 class="text-4xl font-bold text-primary mb-2">AgriWeather</h1>
             <p class="text-gray-600 text-lg">Ramalan Cuaca Harian untuk 7 Hari ke Depan (Model MLP Time Series)</p>
@@ -42,10 +39,8 @@
             </p>
         </header>
 
-        <!-- Container Ramalan Cuaca -->
         <div class="space-y-10">
 
-            <!-- Bagian Ramalan (Forecast) -->
             <section id="forecast-section">
                 <h2 class="text-2xl font-bold text-gray-700 mb-4">Ramalan 7 Hari Ke Depan</h2>
                 <div id="loading-message" class="text-center p-6 bg-blue-100 text-blue-800 rounded-lg shadow-md">
@@ -60,18 +55,14 @@
                     ❌ Gagal memuat data ramalan. Pastikan *backend* (FastAPI) sudah berjalan dan model (`.pkl`) tersedia.
                 </div>
 
-                <!-- Grid Kartu Prediksi: 3 kolom di desktop, 2 di tablet, 1 di mobile -->
                 <div id="forecast-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Kartu-kartu prediksi akan dirender di sini -->
-                </div>
+                    </div>
             </section>
 
-            <!-- Bagian Evaluasi Model -->
             <div id="evaluation-section" class="hidden p-6 bg-white rounded-xl shadow-lg">
                 <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Evaluasi Kinerja Model (RMSE/MAE)</h2>
                 <div id="evaluation-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <!-- Kartu evaluasi akan dirender di sini -->
-                </div>
+                    </div>
             </div>
 
         </div>
@@ -80,7 +71,7 @@
     <script>
         // Gunakan port 8000 (default FastAPI)
         const API_BASE_URL = 'http://localhost:8000'; 
-        // Menggunakan endpoint prediksi
+        // Menggunakan endpoint prediksi yang mengembalikan { predictions: [], evaluations: [] }
         const FORECAST_ENDPOINT = `${API_BASE_URL}/weather/predict/`; 
         
         const forecastGrid = document.getElementById('forecast-grid');
@@ -132,37 +123,30 @@
 
             // Layout untuk Hari Pertama (Lebih Besar, Full Row)
             if (isFirstDay) {
-                // *** ADJUSMENT: Menggunakan grid-cols-3 untuk 3 item berjejer rapi ***
                 return `
                     <div class="p-8 ${bgColor} rounded-xl shadow-lg transition duration-300 hover:shadow-xl transform hover:-translate-y-1 ${colSpan}">
                         <div class="${layoutClass} w-full">
-                            <!-- Kiri: Info Hari -->
                             <div class="md:w-1/3 text-center md:text-left mb-4 md:mb-0">
                                 <h2 class="text-3xl font-extrabold ${textColor} mb-1">${formattedDate.split(',')[0]}</h2>
                                 <p class="text-base ${subTextColor}">${formattedDate.split(',').slice(1).join(',').trim()}</p>
                             </div>
-                            <!-- Tengah: Ikon & Suhu Besar -->
                             <div class="md:w-1/3 text-center mb-4 md:mb-0">
                                 ${icon.replace('text-5xl', 'text-7xl')}
                                 <p class="text-5xl font-bold ${textColor} mt-2">${item.temperature_c ? item.temperature_c.toFixed(1) : '-'}°C</p>
                                 <p class="text-base ${subTextColor}">Suhu Rata-rata Prediksi</p>
                             </div>
-                            <!-- Kanan: Detail Lain (Grid 3 Kolom) -->
                             <div class="md:w-1/3 grid grid-cols-3 gap-4 text-sm font-medium p-4 rounded-lg ${isFirstDay ? 'bg-black/10' : 'bg-gray-100'}">
                                 
-                                <!-- Kelembapan (Kolom 1) -->
                                 <div class="${textColor} p-2 rounded-md text-center">
                                     <span class="font-bold block text-2xl">${item.humidity_percent ? item.humidity_percent.toFixed(0) : '-'}%</span>
                                     <span class="${subTextColor} text-xs">Kelembapan</span>
                                 </div>
                                 
-                                <!-- Tekanan (Kolom 2) -->
                                 <div class="${textColor} p-2 rounded-md text-center">
                                     <span class="font-bold block text-2xl">${item.pressure_hpa ? item.pressure_hpa.toFixed(0) : '-'} hPa</span>
                                     <span class="${subTextColor} text-xs">Tekanan</span>
                                 </div>
                                 
-                                <!-- Kec. Angin (Kolom 3) -->
                                 <div class="${textColor} p-2 rounded-md text-center">
                                     <span class="font-bold block text-2xl">${item.wind_speed_kmh ? item.wind_speed_kmh.toFixed(1) : '-'} km/h</span>
                                     <span class="${subTextColor} text-xs">Kec. Angin</span>
@@ -188,7 +172,6 @@
                     </div>
 
                     <div class="mt-4 border-t pt-4 ${isFirstDay ? 'border-gray-500' : 'border-gray-200'}">
-                        <!-- Layout 2x2 dengan Kelembaban dan Kec. Angin di kanan -->
                         <div class="grid grid-cols-2 gap-4 text-sm font-medium">
                             <div class="${textColor}">
                                 <span class="font-bold block text-xl">${item.temperature_c ? item.temperature_c.toFixed(1) : '-'}°C</span>
@@ -247,38 +230,37 @@
                 
                 const result = await response.json(); 
                 
-                // Pengecekan sederhana bahwa data prediksi yang valid diterima
-                if (Array.isArray(result) && result.length > 0) { 
+                // Pengecekan inti: Pastikan result adalah object dan memiliki properti predictions berupa array
+                if (result && result.predictions && Array.isArray(result.predictions)) { 
                     loadingMessage.classList.add('hidden');
                     
                     // Render Prediksi Cuaca (Forecast)
-                    const forecastHTML = result.map(renderForecastCard).join('');
-                    forecastGrid.innerHTML = forecastHTML;
-                    
-                    console.log("✅ Data Ramalan Berhasil Diterima:", result);
-                    
-                } else if (result.predictions && result.predictions.length > 0) {
-                     // Jika struktur response masih mengandung 'predictions' dan 'evaluations'
-                    loadingMessage.classList.add('hidden');
-                    const forecastHTML = result.predictions.map(renderForecastCard).join('');
+                    const forecastHTML = result.predictions
+                                            .filter((_, index) => index < 7) // Ambil hanya 7 hari pertama
+                                            .map(renderForecastCard)
+                                            .join('');
                     forecastGrid.innerHTML = forecastHTML;
 
-                    if (result.evaluations && result.evaluations.length > 0) {
+                    // Render Evaluasi Model
+                    if (result.evaluations && Array.isArray(result.evaluations) && result.evaluations.length > 0) {
                         const evaluationHTML = result.evaluations.map(renderEvaluationCard).join('');
                         evaluationCards.innerHTML = evaluationHTML;
                         evaluationSection.classList.remove('hidden');
+                    } else {
+                         console.warn("Data evaluasi model kosong atau tidak ditemukan.");
                     }
-                    console.log("✅ Data Ramalan Berhasil Diterima:", result);
+                    
+                    console.log("✅ Data Ramalan & Evaluasi Berhasil Diterima:", result);
                 }
                 else {
-                    throw new Error('Data prediksi kosong atau format tidak sesuai.');
+                    throw new Error('Data prediksi tidak ditemukan atau format JSON tidak sesuai {predictions: [], evaluations: []}.');
                 }
 
             } catch (error) {
                 console.error("Fetch Error:", error);
                 loadingMessage.classList.add('hidden');
                 errorMessage.classList.remove('hidden');
-                errorMessage.textContent = `❌ Gagal memuat data ramalan. Detail: ${error.message}. Pastikan backend berjalan di port 8000.`;
+                errorMessage.textContent = `❌ Gagal memuat data ramalan. Detail: ${error.message}. Pastikan backend berjalan di ${API_BASE_URL}.`;
             }
         }
 

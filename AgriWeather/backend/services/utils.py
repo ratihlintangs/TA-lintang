@@ -3,13 +3,13 @@ import sys
 import joblib
 import pandas as pd
 import numpy as np
-import traceback # Import untuk mencetak detail error
+import traceback 
 from pydantic import BaseModel
 from typing import List, Tuple, Dict, Any
 from datetime import datetime, timedelta
 from math import sin, cos, pi
 
-# Tambahkan path induk agar bisa mengimpor model database (tetap dipertahankan, tapi menggunakan dummy)
+# Tambahkan path induk agar bisa mengimpor model database
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- 1. KONFIGURASI DAN STRUKTUR DATA (Pydantic) ---
@@ -17,6 +17,18 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 TARGET_COLUMNS = ['temperature', 'humidity', 'pressure', 'wind_speed']
 DAYS_TO_FORECAST = 7
 
+# V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V V
+# DEFINISI UNTUK ROUTER HISTORY (weather.py)
+class WeatherHistory(BaseModel):
+    """Schema Pydantic untuk data historis yang diambil dari DB."""
+    id: int
+    date: str 
+    temperature: float
+    humidity: float
+    pressure: float
+    wind_speed: float
+    
+# DEFINISI UNTUK ROUTER PREDICTION (prediction.py)
 class ModelEvaluation(BaseModel):
     target: str
     rmse: float
@@ -31,11 +43,13 @@ class ForecastData(BaseModel):
     wind_speed_kmh: float
 
 class ForecastResponse(BaseModel):
+    """Schema respons lengkap yang diharapkan oleh frontend."""
     predictions: List[ForecastData]
     evaluations: List[ModelEvaluation]
+# ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 
 
-# --- DUMMY DATA LOADER ---
+# --- DUMMY DATA LOADER (Digunakan jika database kosong atau gagal) ---
 
 def load_dummy_data() -> pd.DataFrame:
     """
@@ -83,18 +97,17 @@ def _load_model_and_scalers(target_col: str) -> Tuple[Any, Any, Any]:
         return model, scaler_X, scaler_y
     except FileNotFoundError as e:
         print(f"FATAL ERROR: File model HILANG atau salah path: {e}")
-        traceback.print_exc() # Cetak traceback untuk FileNotFoundError
+        traceback.print_exc() 
         raise 
     except Exception as e:
         # Menangkap error deserialisasi atau kompatibilitas
         print(f"FATAL ERROR: Gagal memuat model/scaler {target_col} (Joblib/Kompatibilitas): {e}")
         print(f"           PATH ABSOLUT YANG DICARI: {model_path}")
         print("           ----- FULL TRACEBACK -----")
-        traceback.print_exc() # Ini penting untuk Joblib/Pickle error
+        traceback.print_exc() 
         print("           --------------------------")
         raise Exception(f"Gagal memuat model {target_col}: {e}")
 
-# ... (Fungsi _create_features dan _predict_single_variable sama seperti sebelumnya) ...
 def _create_features(df: pd.DataFrame, target_col: str, forecast_date: datetime):
     """
     Membuat fitur (lag dan musiman) untuk tanggal prediksi tertentu.
@@ -185,21 +198,12 @@ def _predict_single_variable(df_hist: pd.DataFrame, target_col: str) -> List[Tup
 
 # --- 3. FUNGSI UTAMA ---
 
-def load_all_models_and_data() -> Tuple[List[ForecastData], List[ModelEvaluation]]:
+def load_all_models_and_data(df_hist: pd.DataFrame) -> Tuple[List[ForecastData], List[ModelEvaluation]]:
     """
     Fungsi ini adalah alur kerja utama.
+    (Diperbarui untuk menerima df_hist agar lebih mudah diuji)
     """
-    print("\n========================================================")
-    print(f"INFO: Memulai alur kerja prediksi 7 hari. Cek {os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')} untuk model.")
-    print("========================================================\n")
     
-    # 1. Muat Data Historis (menggunakan DUMMY)
-    try:
-        df_hist = load_dummy_data() 
-    except Exception as e:
-        print(f"ERROR: Gagal memuat data historis (DUMMY): {e}")
-        return [], []
-        
     if df_hist.empty:
         print("PERINGATAN: Data historis kosong. Tidak dapat melakukan prediksi.")
         return [], []
@@ -232,6 +236,7 @@ def load_all_models_and_data() -> Tuple[List[ForecastData], List[ModelEvaluation
             )
             combined_forecast.append(daily_forecast)
 
+    # Dummy Evaluations (untuk memenuhi schema ForecastResponse)
     dummy_evaluations = [
         ModelEvaluation(target="Temperature", rmse=2.15, mae=1.58, model_name="MLP"),
         ModelEvaluation(target="Humidity", rmse=4.51, mae=3.10, model_name="MLP"),
@@ -239,13 +244,4 @@ def load_all_models_and_data() -> Tuple[List[ForecastData], List[ModelEvaluation
         ModelEvaluation(target="Wind Speed", rmse=0.76, mae=0.55, model_name="MLP"),
     ]
     
-    print("\n========================================================")
-    print("INFO: Startup berhasil! Server siap melayani permintaan.")
-    print("========================================================\n")
     return combined_forecast, dummy_evaluations
-
-# --- 4. Fungsi Tambahan (Sesuai Kerangka Awal) ---
-
-def get_latest_predictions():
-    """Fungsi placeholder, tidak digunakan di app.py."""
-    pass
