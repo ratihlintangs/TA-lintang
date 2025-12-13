@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware # BARIS BARU: Import CORS
-from routers import weather, prediction 
+from routers import weather, predict 
 from database import get_db, Base 
 from models import WeatherHistoryModel  
 
@@ -49,7 +49,7 @@ app.add_middleware(
 
 # --- MENDAFTARKAN ROUTER ---
 app.include_router(weather.router)
-app.include_router(prediction.router) 
+app.include_router(predict.router)
 
 # --- ENDPOINT TEST SEDERHANA ---
 @app.get("/")

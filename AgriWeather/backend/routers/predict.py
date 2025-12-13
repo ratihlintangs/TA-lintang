@@ -1,51 +1,49 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
-from database import load_data_from_db
-from services.predict_service import get_forecast_and_evaluation
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from typing import List, Dict, Any
 
-router = APIRouter()
+from database import get_db
+from services.predict_service import PredictService
+from services.evaluation_service import EvaluationService
 
-# Skema respons Pydantic (opsional, tapi baik untuk struktur)
-class Evaluation(BaseModel):
-    Kombinasi: str
-    Model: str
-    Periode_Awal: str
-    Periode_Akhir: str
-    RMSE: float
-    MAE: float
-    R2: float
-    Fitur: str
+router = APIRouter(prefix="/weather", tags=["Weather Prediction"])
 
-class PredictionResult(BaseModel):
-    tanggal: str
-    Aktual: float
-    Prediksi: float
+# ==============================
+# INIT SERVICES
+# ==============================
+predict_service = PredictService()
+evaluation_service = EvaluationService()
 
-class ForecastResponse(BaseModel):
-    predictions: list[PredictionResult]
-    evaluations: list[Evaluation]
 
-@router.get("/forecast", response_model=ForecastResponse)
-async def get_forecast():
+# ==============================
+# ENDPOINT: FORECAST
+# ==============================
+@router.get("/forecast")
+def forecast_weather(
+    days_ahead: int = 7,
+    db: Session = Depends(get_db)
+) -> List[Dict[str, Any]]:
     """
-    Endpoint untuk menjalankan model peramalan PS, mengambil data dari DB, 
-    dan mengembalikan hasil prediksi serta evaluasi bergulir.
+    Endpoint prediksi cuaca N hari ke depan.
     """
-    try:
-        # 1. Muat Data Mentah dari Database
-        df_raw = load_data_from_db()
-        
-        if df_raw.empty or 'PS' not in df_raw.columns:
-            raise ValueError("Gagal memuat data dari database atau kolom 'PS' hilang.")
+    return predict_service.generate_weather_prediction(
+        db=db,
+        days_ahead=days_ahead
+    )
 
-        # 2. Jalankan Prediction Service
-        results = get_forecast_and_evaluation(df_raw)
-        
-        # 3. Kembalikan Hasil
-        return results
 
-    except Exception as e:
-        # Pengecualian akan ditangani oleh FastAPI dan dikembalikan sebagai status 500
-        print(f"Error pada endpoint /forecast: {e}")
-        # Kembalikan pesan error yang jelas (walaupun response_model akan memvalidasi)
-        raise Exception(f"Terjadi kesalahan saat memproses peramalan: {str(e)}")
+# ==============================
+# ENDPOINT: EVALUATION
+# ==============================
+@router.get("/evaluation")
+def evaluate_weather_model(
+    test_days: int = 7,
+    db: Session = Depends(get_db)
+) -> List[Dict[str, Any]]:
+    """
+    Endpoint evaluasi model cuaca menggunakan rolling evaluation.
+    """
+    return evaluation_service.evaluate_all(
+        db=db,
+        test_days=test_days
+    )
