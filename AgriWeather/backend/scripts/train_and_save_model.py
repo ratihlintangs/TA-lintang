@@ -9,12 +9,21 @@ import warnings
 import sys
 import os
 
+from backend.config_location import (
+    LATITUDE,
+    LONGITUDE,
+    LOCATION_NAME,
+    INVALID_VALUES,
+    NASA_SAFE_LAG_DAYS
+)
+
+
 # === [PENTING] Penyesuaian Jalur Impor ===
 # Memastikan skrip dapat mengimpor dari folder induk (backend)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Impor fungsi muat data nyata dari file database.py
-from database import load_data_from_db 
+from backend.database import load_data_from_db 
 
 # Mengabaikan peringatan saat training
 warnings.filterwarnings('ignore')

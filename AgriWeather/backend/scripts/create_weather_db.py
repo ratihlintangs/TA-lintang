@@ -1,6 +1,15 @@
 import os
 import sqlite3
 
+from backend.config_location import (
+    LATITUDE,
+    LONGITUDE,
+    LOCATION_NAME,
+    INVALID_VALUES,
+    NASA_SAFE_LAG_DAYS
+)
+
+
 # --- Tentukan path database (otomatis tersimpan di folder data/)
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # ke folder backend/
 DATA_DIR = os.path.join(BASE_DIR, "data")

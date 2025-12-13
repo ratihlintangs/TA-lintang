@@ -1,41 +1,48 @@
 import requests
 import sqlite3
 from datetime import datetime, timedelta
+import os
 
-# === Konfigurasi Lokasi & Database ===
-LAT = -7.9227   # Koordinat Stasiun Klimatologi Karangploso, Malang
-LON = 112.6255
-DB_PATH = "backend/data/weather_data.db"
+from backend.config_location import (
+    LATITUDE,
+    LONGITUDE,
+    LOCATION_NAME,
+    INVALID_VALUES,
+    NASA_SAFE_LAG_DAYS
+)
 
-# === Hitung Rentang Waktu (3 tahun ke belakang dari kemarin) ===
-end_date = datetime.now().date() - timedelta(days=1)
+
+# === Path DB ===
+base_dir = os.path.dirname(os.path.dirname(__file__))
+DB_PATH = os.path.join(base_dir, "data", "weather_data.db")
+
+# === Rentang waktu ===
+end_date = datetime.now().date() - timedelta(days=NASA_SAFE_LAG_DAYS)
 start_date = end_date - timedelta(days=3 * 365)
 
 start_str = start_date.strftime("%Y%m%d")
 end_str = end_date.strftime("%Y%m%d")
 
-print(f"Mengambil data NASA dari {start_str} sampai {end_str}...")
+print(f"📍 Lokasi: {LOCATION_NAME} ({LATITUDE}, {LONGITUDE})")
+print(f"📥 Ambil NASA: {start_str} s/d {end_str}")
+print(f"📦 DB: {DB_PATH}")
 
-# === URL API NASA POWER ===
 URL = (
-    f"https://power.larc.nasa.gov/api/temporal/daily/point?"
-    f"start={start_str}&end={end_str}&latitude={LAT}&longitude={LON}"
-    f"&parameters=T2M,RH2M,PS,WS2M&community=RE&format=JSON"
+    "https://power.larc.nasa.gov/api/temporal/daily/point"
+    f"?start={start_str}&end={end_str}"
+    f"&latitude={LATITUDE}&longitude={LONGITUDE}"
+    f"&parameters=T2M,RH2M,PS,WS2M"
+    f"&community=AG&format=JSON"
 )
 
-# === Ambil Data dari NASA POWER ===
-response = requests.get(URL)
-if response.status_code != 200:
-    raise Exception(f"Gagal mengambil data dari NASA: {response.status_code}")
-
+response = requests.get(URL, timeout=60)
+response.raise_for_status()
 data = response.json()
 params = data["properties"]["parameter"]
 
-# === Koneksi ke Database ===
 conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
-# === Buat Tabel (jika belum ada) ===
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS weather_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,22 +55,33 @@ CREATE TABLE IF NOT EXISTS weather_history (
 )
 """)
 
-# === Simpan Data NASA ke Database ===
+def clean(v):
+    if v is None or v in INVALID_VALUES:
+        return None
+    return v
+
 count = 0
-for date_str in params["T2M"].keys():
-    date_obj = datetime.strptime(date_str, "%Y%m%d").date()
-    t2m = params["T2M"].get(date_str)
-    rh2m = params["RH2M"].get(date_str)
-    ps = params["PS"].get(date_str)
-    ws2m = params["WS2M"].get(date_str)
+for date_str in params["T2M"]:
+    date_db = datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
+
+    t2m = clean(params["T2M"].get(date_str))
+    rh2m = clean(params["RH2M"].get(date_str))
+    ps = clean(params["PS"].get(date_str))
+    ws2m = clean(params["WS2M"].get(date_str))
 
     cursor.execute("""
-        INSERT OR IGNORE INTO weather_history (date, temperature, humidity, pressure, wind_speed, source)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (date_obj, t2m, rh2m, ps, ws2m, "NASA"))
+        INSERT INTO weather_history (date, temperature, humidity, pressure, wind_speed, source)
+        VALUES (?, ?, ?, ?, ?, 'NASA')
+        ON CONFLICT(date) DO UPDATE SET
+            temperature=excluded.temperature,
+            humidity=excluded.humidity,
+            pressure=excluded.pressure,
+            wind_speed=excluded.wind_speed
+    """, (date_db, t2m, rh2m, ps, ws2m))
+
     count += 1
 
 conn.commit()
 conn.close()
 
-print(f"✅ Data NASA 3 tahun ke belakang berhasil dimasukkan ke database! ({count} baris)")
+print(f"✅ History selesai: {count} hari")

@@ -11,8 +11,9 @@ from sklearn.metrics import (
     r2_score
 )
 
-from services.predict_service import PredictService
-from database import load_data_from_db
+from backend.services.predict_service import PredictService
+from backend.database import load_data_from_db
+
 
 
 TARGET_COLUMNS = [

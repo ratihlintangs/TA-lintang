@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
-from database import get_db
-from services.predict_service import PredictService
-from services.evaluation_service import EvaluationService
+from backend.database import get_db
+from backend.services.predict_service import PredictService
+from backend.services.evaluation_service import EvaluationService
+
 
 router = APIRouter(prefix="/weather", tags=["Weather Prediction"])
 

@@ -38,23 +38,44 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
+
 # --- UTIL UNTUK PREDICTION SERVICE ---
-def load_data_from_db(db: Session) -> pd.DataFrame:
+def load_data_from_db(db: Session, only_valid: bool = False) -> pd.DataFrame:
+    """
+    Load semua data historis cuaca dari database menjadi DataFrame.
+
+    only_valid=False:
+        - perilaku lama (ambil semua baris)
+
+    only_valid=True:
+        - hanya ambil baris yang nilai utamanya lengkap (non-null)
+          untuk mencegah 'tail null' (tanggal ada tapi datanya belum tersedia).
+    """
     try:
-        from models import WeatherHistoryModel
+        from backend.models import WeatherHistoryModel
 
-        data = (
-            db.query(WeatherHistoryModel)
-            .order_by(WeatherHistoryModel.date.asc())
-            .all()
-        )
+        q = db.query(WeatherHistoryModel).order_by(WeatherHistoryModel.date.asc())
 
+        # Filter baris valid (hindari NULL yang bikin last_date salah)
+        if only_valid:
+            q = q.filter(
+                WeatherHistoryModel.temperature.isnot(None),
+                WeatherHistoryModel.humidity.isnot(None),
+                WeatherHistoryModel.pressure.isnot(None),
+                WeatherHistoryModel.wind_speed.isnot(None),
+            )
+
+        data = q.all()
         df = pd.DataFrame([vars(d) for d in data])
+
+        if df.empty:
+            logger.info("DB load: 0 baris (kosong)")
+            return df
 
         if "_sa_instance_state" in df.columns:
             df = df.drop(columns=["_sa_instance_state"])
 
-        logger.info(f"DB load sukses: {len(df)} baris")
+        logger.info(f"DB load sukses: {len(df)} baris (only_valid={only_valid})")
         return df
 
     except Exception as e:

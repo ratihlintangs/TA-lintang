@@ -1,17 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-
-# PERBAIKAN IMPOR: get_db dari database, WeatherHistoryModel dari models
-from database import get_db
-from models import WeatherHistoryModel 
-
-from services.utils import WeatherHistory
 from typing import List
+
+from backend.database import get_db
+from backend.models import WeatherHistoryModel
+from backend.services.utils import WeatherHistory  # ✅ FIX DI SINI
 
 router = APIRouter(
     prefix="/weather/history",
     tags=["History"],
 )
+
 
 @router.get("/", response_model=List[WeatherHistory])
 def get_historical_data(
@@ -23,13 +22,19 @@ def get_historical_data(
     Mengambil data cuaca historis terbaru dari database.
     """
     try:
-        data = db.query(WeatherHistoryModel).order_by(
-            WeatherHistoryModel.id.desc()
-        ).offset(skip).limit(limit).all()
-        
-        # Mengubah data SQLAlchemy menjadi format Pydantic
-        # Catatan: Ini membutuhkan class WeatherHistory di utils.py
+        data = (
+            db.query(WeatherHistoryModel)
+            .order_by(WeatherHistoryModel.id.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
         return [WeatherHistory.model_validate(item) for item in data]
+
     except Exception as e:
         print(f"Error fetching historical data: {e}")
-        raise HTTPException(status_code=500, detail="Kesalahan saat mengambil data historis")
+        raise HTTPException(
+            status_code=500,
+            detail="Kesalahan saat mengambil data historis",
+        )

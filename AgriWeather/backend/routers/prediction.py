@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
+from backend.database import get_db
 # Import kelas PredictService
-from services.predict_service import PredictService 
+from backend.services.predict_service import PredictService 
 # KOREKSI IMPOR: Gunakan ForecastData, ForecastResponse, dan ModelEvaluation dari utils
-from services.utils import ForecastData, ForecastResponse, ModelEvaluation 
+from backend.services.utils import ForecastData, ForecastResponse, ModelEvaluation 
 from typing import List, Tuple
 
 router = APIRouter(

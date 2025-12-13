@@ -1,6 +1,15 @@
 import sqlite3
 import os
 
+from backend.config_location import (
+    LATITUDE,
+    LONGITUDE,
+    LOCATION_NAME,
+    INVALID_VALUES,
+    NASA_SAFE_LAG_DAYS
+)
+
+
 # === Tentukan path database ===
 base_dir = os.path.dirname(os.path.dirname(__file__))  # sesuaikan jika perlu
 db_path = os.path.join(base_dir, "data", "weather_data.db")

@@ -1,195 +1,325 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriWeather - Ramalan Cuaca 7 Hari</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgriWeather - Ramalan Cuaca 7 Hari</title>
 
-    <!-- Tailwind CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#059669',
-                        secondary: '#34D399',
-                        background: '#F9FAFB',
-                        card: '#FFFFFF',
-                        accent: '#10B981',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                }
-            }
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#059669',
+            secondary: '#34D399',
+            background: '#F9FAFB',
+            card: '#FFFFFF',
+            accent: '#10B981',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
         }
-    </script>
+      }
+    }
+  </script>
 
-    <!-- Font -->
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    </style>
+  <!-- Font -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  </style>
 </head>
 
 <body class="bg-background min-h-screen font-sans p-4 sm:p-8">
 
-<div class="max-w-6xl mx-auto">
+  <div class="max-w-6xl mx-auto">
 
     <!-- HEADER -->
     <header class="text-center mb-10 p-6 bg-white rounded-xl shadow-lg">
-        <h1 class="text-4xl font-bold text-primary mb-2">AgriWeather</h1>
-        <p class="text-gray-600 text-lg">
-            Ramalan Cuaca 7 Hari ke Depan (MLP Time Series Forecasting)
-        </p>
-        <p class="text-sm font-semibold text-accent mt-3">
-            📍 Lokasi Prediksi: Lahan Pertanian
-        </p>
+      <h1 class="text-4xl font-bold text-primary mb-2">AgriWeather</h1>
+      <p class="text-gray-600 text-lg">
+        Ramalan Cuaca Harian untuk 7 Hari ke Depan (Model MLP Time Series)
+      </p>
+      <p class="text-sm font-semibold text-accent mt-3">
+        📍 Lokasi Prediksi: Stasiun Klimatologi Karangploso (BMKG)
+      </p>
     </header>
 
     <!-- FORECAST -->
     <section class="mb-12">
-        <h2 class="text-2xl font-bold text-gray-700 mb-4">
-            Ramalan Cuaca 7 Hari Ke Depan
-        </h2>
+      <h2 class="text-2xl font-bold text-gray-700 mb-4">
+        Ramalan 7 Hari Ke Depan
+      </h2>
 
-        <div id="loading" class="p-6 bg-blue-100 text-blue-800 rounded-lg text-center">
-            ⏳ Memuat data ramalan cuaca...
-        </div>
+      <div id="loading" class="p-6 bg-blue-100 text-blue-800 rounded-lg text-center">
+        ⏳ Memuat data ramalan cuaca...
+      </div>
 
-        <div id="error" class="hidden p-6 bg-red-100 text-red-800 rounded-lg text-center">
-            ❌ Gagal memuat data dari server.
-        </div>
+      <div id="error" class="hidden p-6 bg-red-100 text-red-800 rounded-lg text-center">
+        ❌ Gagal memuat data dari server.
+      </div>
 
-        <div id="forecast-grid"
-             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-        </div>
+      <!-- Featured Card (Hari pertama) -->
+      <div id="featured-forecast" class="mt-6"></div>
+
+      <!-- Grid 6 hari berikutnya -->
+      <div id="forecast-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6"></div>
     </section>
 
     <!-- EVALUATION -->
-    <section id="evaluation-section"
-             class="hidden p-6 bg-white rounded-xl shadow-lg">
-        <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">
-            Evaluasi Kinerja Model
-        </h2>
+    <section id="evaluation-section" class="hidden p-6 bg-white rounded-xl shadow-lg">
+      <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">
+        Evaluasi Kinerja Model
+      </h2>
 
-        <div id="evaluation-cards"
-             class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        </div>
+      <div id="evaluation-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
     </section>
 
-</div>
+  </div>
 
-<script>
-/* ===========================
-   KONFIGURASI API
-=========================== */
-const API_BASE_URL = "http://localhost:8000";
-const FORECAST_ENDPOINT = `${API_BASE_URL}/weather/forecast`;
-const EVALUATION_ENDPOINT = `${API_BASE_URL}/weather/evaluation`;
+  <script>
+    /* ===========================
+       KONFIGURASI API
+    =========================== */
+    const API_BASE_URL = "http://localhost:8000";
+    const FORECAST_ENDPOINT = `${API_BASE_URL}/weather/forecast`;
+    const EVALUATION_ENDPOINT = `${API_BASE_URL}/weather/evaluation`;
 
-const loadingEl = document.getElementById("loading");
-const errorEl = document.getElementById("error");
-const forecastGrid = document.getElementById("forecast-grid");
-const evalSection = document.getElementById("evaluation-section");
-const evalCards = document.getElementById("evaluation-cards");
+    const loadingEl = document.getElementById("loading");
+    const errorEl = document.getElementById("error");
+    const featuredEl = document.getElementById("featured-forecast");
+    const forecastGrid = document.getElementById("forecast-grid");
+    const evalSection = document.getElementById("evaluation-section");
+    const evalCards = document.getElementById("evaluation-cards");
 
-/* ===========================
-   HELPER FUNCTIONS
-=========================== */
-function formatTanggal(dateStr) {
-    return new Date(dateStr).toLocaleDateString("id-ID", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-    });
-}
+    /* ===========================
+       HELPERS
+    =========================== */
+    function splitHariTanggal(dateStr) {
+      const d = new Date(dateStr);
+      const hari = d.toLocaleDateString("id-ID", { weekday: "long" });
+      const tanggal = d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+      return { hari, tanggal };
+    }
 
-function weatherIcon(temp) {
-    if (temp >= 30) return "☀️";
-    if (temp >= 24) return "⛅";
-    return "🌧️";
-}
+    function safeFixed(value, digits) {
+      const num = Number(value);
+      if (Number.isNaN(num)) return "-";
+      return num.toFixed(digits);
+    }
 
-/* ===========================
-   RENDER FORECAST CARD
-=========================== */
-function renderForecastCard(item) {
-    return `
-        <div class="p-6 bg-card rounded-xl shadow hover:shadow-lg transition">
-            <h3 class="font-bold text-lg text-gray-800 mb-1">
-                ${formatTanggal(item.date)}
-            </h3>
+    /* ===========================
+       RULE-BASED WEATHER CLASSIFICATION
+       (Sesuai tabel threshold TA)
+    =========================== */
+    function classifyWeather(item) {
+      const T = Number(item.temperature_c);       // °C
+      const RH = Number(item.humidity_percent);   // %
+      const PS = Number(item.pressure_hpa);       // hPa
+      const WS = Number(item.wind_speed_kmh);     // km/h
 
-            <div class="text-5xl my-2 text-center">
-                ${weatherIcon(item.temperature_c)}
-            </div>
+      if ([T, RH, PS, WS].some(v => Number.isNaN(v))) {
+        return { label: "Tidak diketahui", icon: "❓" };
+      }
 
-            <p class="text-center text-3xl font-bold text-primary">
-                ${item.temperature_c?.toFixed(1)}°C
-            </p>
+      // Konversi WS > 3 m/s → > 10.8 km/h
+      const WIND_THRESHOLD = 10.8;
 
-            <div class="grid grid-cols-2 gap-2 text-sm mt-4 text-gray-600">
-                <p>💧 ${item.humidity_percent?.toFixed(0)}%</p>
-                <p>🌬️ ${item.wind_speed_kmh?.toFixed(1)} km/h</p>
-                <p>📈 ${item.pressure_hpa?.toFixed(0)} hPa</p>
-            </div>
+      // Tekanan (kPa → hPa)
+      const PS_LOW = 1008;
+      const PS_HIGH = 1012;
+
+      // 1. Hujan
+      if (RH > 85 && T < 27 && PS < PS_LOW) return { label: "Hujan", icon: "🌧️" };
+
+      // 2. Hujan Ringan
+      if (RH > 80 && T >= 27 && T <= 29 && PS >= PS_LOW && PS <= PS_HIGH) {
+        return { label: "Hujan Ringan", icon: "🌦️" };
+      }
+
+      // 3. Berangin
+      if (WS > WIND_THRESHOLD) return { label: "Berangin", icon: "🌬️" };
+
+      // 4. Panas Lembap
+      if (T > 30 && RH >= 70) return { label: "Panas Lembap", icon: "🥵" };
+
+      // 5. Cerah
+      if (T > 30 && RH < 60) return { label: "Cerah", icon: "☀️" };
+
+      // 6. Berawan Tebal
+      if (RH >= 75 && T < 27) return { label: "Berawan Tebal", icon: "☁️" };
+
+      // 7. Berawan
+      if (T >= 25 && T <= 30 && RH >= 60 && RH <= 85) return { label: "Berawan", icon: "⛅" };
+
+      // 8. Lainnya
+      return { label: "Lainnya", icon: "🌫️" };
+    }
+
+    /* ===========================
+       UI COMPONENTS (Parameter Cards)
+    =========================== */
+    function parameterBlockFeatured(labelId, labelHuman, valueStr, unit, englishHint) {
+      return `
+        <div class="text-center">
+          <p class="text-xs text-white/90 mb-1">${labelHuman}</p>
+          <p class="text-lg font-bold">${valueStr} ${unit}</p>
+          <p class="text-[10px] text-white/70">${englishHint}</p>
         </div>
-    `;
-}
+      `;
+    }
 
-/* ===========================
-   RENDER EVALUATION CARD
-=========================== */
-function renderEvaluationCard(item) {
-    return `
+    function parameterBlockSmall(icon, labelHuman, valueStr) {
+      return `
+        <div class="flex items-start justify-between gap-3">
+          <p class="text-xs text-gray-500">${icon} ${labelHuman}</p>
+          <p class="text-xs font-semibold text-gray-700">${valueStr}</p>
+        </div>
+      `;
+    }
+
+    /* ===========================
+       RENDER FEATURED CARD (hari pertama)
+    =========================== */
+    function renderFeaturedCard(item) {
+      const wx = classifyWeather(item);
+      const { hari, tanggal } = splitHariTanggal(item.date);
+
+      const rhVal = `${safeFixed(item.humidity_percent, 0)}`;
+      const psVal = `${safeFixed(item.pressure_hpa, 0)}`;
+      const wsVal = `${safeFixed(item.wind_speed_kmh, 1)}`;
+
+      return `
+        <div class="rounded-2xl shadow-lg overflow-hidden">
+          <div class="bg-emerald-500 p-6 sm:p-7">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+
+              <div class="text-white">
+                <p class="text-2xl font-bold leading-tight">${hari}</p>
+                <p class="text-white/90">${tanggal}</p>
+              </div>
+
+              <div class="flex items-center justify-center gap-4">
+                <div class="text-5xl">${wx.icon}</div>
+                <div class="text-center text-white">
+                  <p class="text-4xl font-bold">${safeFixed(item.temperature_c, 1)}°C</p>
+                  <p class="text-white/90 text-sm -mt-1">${wx.label}</p>
+                  <p class="text-white/70 text-xs mt-2">
+                    Suhu Udara • Temperature 
+                  </p>
+                </div>
+              </div>
+
+              <div class="bg-white/15 rounded-xl p-4 text-white min-w-[320px]">
+                <div class="grid grid-cols-3 gap-4 text-center">
+                  ${parameterBlockFeatured("RH2M", "Kelembapan Udara", rhVal, "%", "Relative Humidity")}
+                  ${parameterBlockFeatured("PS", "Tekanan Udara", psVal, "hPa", "Surface Pressure")}
+                  ${parameterBlockFeatured("WS2M", "Kecepatan Angin", wsVal, "km/h", "Wind Speed")}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    /* ===========================
+       RENDER SMALL CARD (hari ke-2 s/d ke-7)
+    =========================== */
+    function renderSmallCard(item) {
+      const wx = classifyWeather(item);
+      const { hari, tanggal } = splitHariTanggal(item.date);
+
+      return `
+        <div class="p-5 bg-card rounded-2xl shadow hover:shadow-lg transition">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="font-bold text-gray-800">${hari}</h3>
+              <p class="text-xs text-gray-500">${tanggal}</p>
+            </div>
+            <div class="text-3xl">${wx.icon}</div>
+          </div>
+
+          <div class="mt-3 flex items-end justify-between gap-4">
+            <div>
+              <p class="text-2xl font-bold text-primary">${safeFixed(item.temperature_c, 1)}°C</p>
+              <p class="text-sm text-gray-600">${wx.label}</p>
+              <p class="text-xs text-gray-500 mt-1">
+                Suhu Udara 
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-2 min-w-[150px]">
+              ${parameterBlockSmall("💧", "Kelembapan", `${safeFixed(item.humidity_percent, 0)} %`)}
+              ${parameterBlockSmall("📈", "Tekanan Udara", `${safeFixed(item.pressure_hpa, 0)} hPa`)}
+              ${parameterBlockSmall("🌬️", "Kecepatan Angin", `${safeFixed(item.wind_speed_kmh, 1)} km/h`)}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    /* ===========================
+       RENDER EVALUATION CARD
+    =========================== */
+    function renderEvaluationCard(item) {
+      return `
         <div class="p-4 bg-gray-50 border rounded-lg text-center">
-            <h3 class="font-semibold text-primary mb-1">
-                ${item.parameter.toUpperCase()}
-            </h3>
-            <p class="text-sm">MSE: ${item.MSE.toFixed(3)}</p>
-            <p class="text-sm">RMSE: ${item.RMSE.toFixed(3)}</p>
-            <p class="text-sm">MAE: ${item.MAE.toFixed(3)}</p>
-            <p class="text-sm font-bold">R²: ${item.R2.toFixed(3)}</p>
+          <h3 class="font-semibold text-primary mb-1">
+            ${String(item.parameter || "").toUpperCase()}
+          </h3>
+          <p class="text-sm">MSE: ${Number(item.MSE).toFixed(3)}</p>
+          <p class="text-sm">RMSE: ${Number(item.RMSE).toFixed(3)}</p>
+          <p class="text-sm">MAE: ${Number(item.MAE).toFixed(3)}</p>
+          <p class="text-sm font-bold">R²: ${Number(item.R2).toFixed(3)}</p>
         </div>
-    `;
-}
+      `;
+    }
 
-/* ===========================
-   FETCH DATA
-=========================== */
-async function loadData() {
-    try {
-        // FETCH FORECAST
+    /* ===========================
+       FETCH DATA
+    =========================== */
+    async function loadData() {
+      try {
+        // FORECAST
         const forecastRes = await fetch(FORECAST_ENDPOINT);
         const forecastData = await forecastRes.json();
+        const sevenDays = forecastData.slice(0, 7);
 
-        forecastGrid.innerHTML = forecastData
-            .slice(0, 7)
-            .map(renderForecastCard)
-            .join("");
+        if (!sevenDays.length) throw new Error("Forecast kosong");
 
-        // FETCH EVALUATION
+        // Featured (hari pertama)
+        featuredEl.innerHTML = renderFeaturedCard(sevenDays[0]);
+
+        // Grid (6 hari berikutnya)
+        forecastGrid.innerHTML = sevenDays
+          .slice(1)
+          .map(renderSmallCard)
+          .join("");
+
+        // EVALUATION
         const evalRes = await fetch(EVALUATION_ENDPOINT);
         const evalData = await evalRes.json();
 
         evalCards.innerHTML = evalData
-            .map(renderEvaluationCard)
-            .join("");
+          .map(renderEvaluationCard)
+          .join("");
 
         evalSection.classList.remove("hidden");
         loadingEl.classList.add("hidden");
 
-    } catch (err) {
+      } catch (err) {
         console.error(err);
         loadingEl.classList.add("hidden");
         errorEl.classList.remove("hidden");
+      }
     }
-}
 
-document.addEventListener("DOMContentLoaded", loadData);
-</script>
+    document.addEventListener("DOMContentLoaded", loadData);
+  </script>
 
 </body>
 </html>

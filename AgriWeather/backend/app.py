@@ -1,29 +1,28 @@
 from fastapi import FastAPI
-from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
-from fastapi.middleware.cors import CORSMiddleware # BARIS BARU: Import CORS
-from routers import weather, predict 
-from database import get_db, Base 
-from models import WeatherHistoryModel  
+from fastapi.middleware.cors import CORSMiddleware
 
-# --- FUNGSI UNTUK MEMBUAT TABEL DATABASE ---
+from backend.database import Base, engine
+from backend.routers import weather, predict
+
+
 def create_tables():
-    """Membuat tabel dalam database jika belum ada."""
     try:
-        Base.metadata.create_all(bind=Base.engine) 
+        Base.metadata.create_all(bind=engine)
         print("INFO: Tabel database berhasil dibuat (jika belum ada).")
     except Exception as e:
-        print(f"FATAL ERROR: Gagal membuat tabel database: {e}") 
+        print(f"FATAL ERROR: Gagal membuat tabel database: {e}")
 
-# --- FASTAPI LIFESPAN ---
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app_: FastAPI):
     create_tables()
     print("INFO: Aplikasi FastAPI dimulai.")
     yield
     print("INFO: Aplikasi FastAPI dimatikan.")
 
-# --- INISIALISASI APLIKASI ---
+
+# ✅ INI YANG DICARI UVICORN: variabel bernama `app` harus ada di level module
 app = FastAPI(
     title="AgriWeather API",
     description="API untuk prediksi cuaca pertanian.",
@@ -31,10 +30,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# --- KONFIGURASI CORS ---
 origins = [
-    "http://localhost:5500", 
-    "http://127.0.0.1:5500", 
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
@@ -47,11 +45,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- MENDAFTARKAN ROUTER ---
 app.include_router(weather.router)
 app.include_router(predict.router)
 
-# --- ENDPOINT TEST SEDERHANA ---
+
 @app.get("/")
 def read_root():
     return {"message": "Selamat datang di AgriWeather API! Akses /docs untuk dokumentasi."}
