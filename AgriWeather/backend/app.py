@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import Base, engine
 from backend.routers import weather, predict
-
+from backend.routers.evaluation_history import router as evaluation_history_router
 
 def create_tables():
     try:
@@ -47,6 +47,7 @@ app.add_middleware(
 
 app.include_router(weather.router)
 app.include_router(predict.router)
+app.include_router(evaluation_history_router)
 
 
 @app.get("/")
