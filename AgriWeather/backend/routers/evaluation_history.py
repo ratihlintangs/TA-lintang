@@ -51,3 +51,11 @@ def list_history(
         parameter=parameter,
         horizon_days=horizon_days,
     )
+@router.get("/latest")
+def latest_history(
+    horizon_days: int = Query(7),
+    db: Session = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    return svc.get_latest_valid(db=db, horizon_days=horizon_days)
+
+

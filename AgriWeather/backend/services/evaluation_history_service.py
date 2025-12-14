@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+import math
+
 
 from backend.database import load_data_from_db
 from backend.models import EvaluationHistoryModel
@@ -350,3 +352,47 @@ class EvaluationHistoryService:
                 "n_samples": r.n_samples,
             })
         return out
+    def get_latest_valid(self, db: Session, horizon_days: int = 7) -> List[Dict[str, Any]]:
+        q = db.query(EvaluationHistoryModel).filter(
+            EvaluationHistoryModel.horizon_days == horizon_days,
+            EvaluationHistoryModel.mse.isnot(None),
+            EvaluationHistoryModel.rmse.isnot(None),
+            EvaluationHistoryModel.mae.isnot(None),
+        ).order_by(EvaluationHistoryModel.eval_date.desc())
+
+        rows = q.all()
+        if not rows:
+            return []
+
+        def ok(x):
+            return (x is not None) and math.isfinite(float(x))
+
+        latest_date = None
+        for r in rows:
+            if ok(r.mse) and ok(r.rmse) and ok(r.mae):
+                latest_date = r.eval_date
+                break
+
+        if latest_date is None:
+            return []
+
+        rows2 = db.query(EvaluationHistoryModel).filter(
+            EvaluationHistoryModel.eval_date == latest_date,
+            EvaluationHistoryModel.horizon_days == horizon_days,
+        ).order_by(EvaluationHistoryModel.parameter.asc()).all()
+
+        return [
+            {
+                "eval_date": r.eval_date.strftime("%Y-%m-%d"),
+                "horizon_days": r.horizon_days,
+                "parameter": r.parameter,
+                "MSE": r.mse,
+                "RMSE": r.rmse,
+                "MAE": r.mae,
+                "R2": r.r2,
+                "n_samples": r.n_samples,
+            }
+            for r in rows2
+        ]
+
+

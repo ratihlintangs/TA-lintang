@@ -85,7 +85,8 @@
     =========================== */
     const API_BASE_URL = "http://localhost:8000";
     const FORECAST_ENDPOINT = `${API_BASE_URL}/weather/forecast`;
-    const EVALUATION_ENDPOINT = `${API_BASE_URL}/weather/evaluation`;
+    const EVALUATION_ENDPOINT = `${API_BASE_URL}/weather/evaluation-history/latest?horizon_days=7`;
+
 
     const loadingEl = document.getElementById("loading");
     const errorEl = document.getElementById("error");
@@ -104,10 +105,12 @@
       return { hari, tanggal };
     }
 
+
     function safeFixed(value, digits) {
-      const num = Number(value);
-      if (Number.isNaN(num)) return "-";
-      return num.toFixed(digits);
+    if (value === null || value === undefined || value === "") return "-";
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "-";
+    return num.toFixed(digits);
     }
 
     /* ===========================
@@ -266,18 +269,20 @@
        RENDER EVALUATION CARD
     =========================== */
     function renderEvaluationCard(item) {
-      return `
-        <div class="p-4 bg-gray-50 border rounded-lg text-center">
-          <h3 class="font-semibold text-primary mb-1">
-            ${String(item.parameter || "").toUpperCase()}
-          </h3>
-          <p class="text-sm">MSE: ${Number(item.MSE).toFixed(3)}</p>
-          <p class="text-sm">RMSE: ${Number(item.RMSE).toFixed(3)}</p>
-          <p class="text-sm">MAE: ${Number(item.MAE).toFixed(3)}</p>
-          <p class="text-sm font-bold">R²: ${Number(item.R2).toFixed(3)}</p>
-        </div>
-      `;
-    }
+  return `
+    <div class="p-4 bg-gray-50 border rounded-lg text-center">
+      <h3 class="font-semibold text-primary mb-1">
+        ${String(item.parameter || "").toUpperCase()}
+      </h3>
+      <p class="text-sm">MSE: ${safeFixed(item.MSE, 3)}</p>
+      <p class="text-sm">RMSE: ${safeFixed(item.RMSE, 3)}</p>
+      <p class="text-sm">MAE: ${safeFixed(item.MAE, 3)}</p>
+      <p class="text-sm font-bold">R²: ${safeFixed(item.R2, 3)}</p>
+      <p class="text-[10px] text-gray-400 mt-2">Eval date: ${item.eval_date || "-"}</p>
+    </div>
+  `;
+}
+
 
     /* ===========================
        FETCH DATA
