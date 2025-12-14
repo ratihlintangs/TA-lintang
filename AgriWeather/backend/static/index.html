@@ -1,11 +1,18 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+  <!-- ================= PWA ================= -->
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#059669">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="icon" href="/static/icons/icon-192.png">
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AgriWeather - Ramalan Cuaca 7 Hari</title>
 
-  <!-- Tailwind CDN -->
+  <!-- ================= TAILWIND ================= -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -26,7 +33,7 @@
     }
   </script>
 
-  <!-- Font -->
+  <!-- ================= FONT ================= -->
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
   </style>
@@ -36,7 +43,7 @@
 
   <div class="max-w-6xl mx-auto">
 
-    <!-- HEADER -->
+    <!-- ================= HEADER ================= -->
     <header class="text-center mb-10 p-6 bg-white rounded-xl shadow-lg">
       <h1 class="text-4xl font-bold text-primary mb-2">AgriWeather</h1>
       <p class="text-gray-600 text-lg">
@@ -47,7 +54,7 @@
       </p>
     </header>
 
-    <!-- FORECAST -->
+    <!-- ================= FORECAST ================= -->
     <section class="mb-12">
       <h2 class="text-2xl font-bold text-gray-700 mb-4">
         Ramalan 7 Hari Ke Depan
@@ -61,32 +68,24 @@
         ❌ Gagal memuat data dari server.
       </div>
 
-      <!-- Featured Card (Hari pertama) -->
       <div id="featured-forecast" class="mt-6"></div>
-
-      <!-- Grid 6 hari berikutnya -->
       <div id="forecast-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6"></div>
     </section>
 
-    <!-- EVALUATION -->
+    <!-- ================= EVALUATION ================= -->
     <section id="evaluation-section" class="hidden p-6 bg-white rounded-xl shadow-lg">
       <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">
         Evaluasi Kinerja Model
       </h2>
-
       <div id="evaluation-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
     </section>
 
   </div>
 
   <script>
-    /* ===========================
-       KONFIGURASI API
-    =========================== */
-    const API_BASE_URL = "http://localhost:8000";
-    const FORECAST_ENDPOINT = `${API_BASE_URL}/weather/forecast`;
-    const EVALUATION_ENDPOINT = `${API_BASE_URL}/weather/evaluation-history/latest?horizon_days=7`;
-
+    /* ================= API ENDPOINT ================= */
+    const FORECAST_ENDPOINT = `/weather/forecast`;
+    const EVALUATION_ENDPOINT = `/weather/evaluation-history/latest?horizon_days=7`;
 
     const loadingEl = document.getElementById("loading");
     const errorEl = document.getElementById("error");
@@ -95,81 +94,48 @@
     const evalSection = document.getElementById("evaluation-section");
     const evalCards = document.getElementById("evaluation-cards");
 
-    /* ===========================
-       HELPERS
-    =========================== */
+    /* ================= HELPERS ================= */
+    function safeFixed(value, digits) {
+      if (value === null || value === undefined || value === "") return "-";
+      const num = Number(value);
+      if (!Number.isFinite(num)) return "-";
+      return num.toFixed(digits);
+    }
+
     function splitHariTanggal(dateStr) {
       const d = new Date(dateStr);
-      const hari = d.toLocaleDateString("id-ID", { weekday: "long" });
-      const tanggal = d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
-      return { hari, tanggal };
+      return {
+        hari: d.toLocaleDateString("id-ID", { weekday: "long" }),
+        tanggal: d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+      };
     }
 
-
-    function safeFixed(value, digits) {
-    if (value === null || value === undefined || value === "") return "-";
-    const num = Number(value);
-    if (!Number.isFinite(num)) return "-";
-    return num.toFixed(digits);
-    }
-
-    /* ===========================
-       RULE-BASED WEATHER CLASSIFICATION
-       (Sesuai tabel threshold TA)
-    =========================== */
     function classifyWeather(item) {
-      const T = Number(item.temperature_c);       // °C
-      const RH = Number(item.humidity_percent);   // %
-      const PS = Number(item.pressure_hpa);       // hPa
-      const WS = Number(item.wind_speed_kmh);     // km/h
+      const T = Number(item.temperature_c);
+      const RH = Number(item.humidity_percent);
+      const PS = Number(item.pressure_hpa);
+      const WS = Number(item.wind_speed_kmh);
 
       if ([T, RH, PS, WS].some(v => Number.isNaN(v))) {
         return { label: "Tidak diketahui", icon: "❓" };
       }
 
-      // Konversi WS > 3 m/s → > 10.8 km/h
-      const WIND_THRESHOLD = 10.8;
-
-      // Tekanan (kPa → hPa)
-      const PS_LOW = 1008;
-      const PS_HIGH = 1012;
-
-      // 1. Hujan
-      if (RH > 85 && T < 27 && PS < PS_LOW) return { label: "Hujan", icon: "🌧️" };
-
-      // 2. Hujan Ringan
-      if (RH > 80 && T >= 27 && T <= 29 && PS >= PS_LOW && PS <= PS_HIGH) {
-        return { label: "Hujan Ringan", icon: "🌦️" };
-      }
-
-      // 3. Berangin
-      if (WS > WIND_THRESHOLD) return { label: "Berangin", icon: "🌬️" };
-
-      // 4. Panas Lembap
+      if (RH > 85 && T < 27 && PS < 1008) return { label: "Hujan", icon: "🌧️" };
+      if (RH > 80 && T >= 27 && T <= 29 && PS >= 1008 && PS <= 1012) return { label: "Hujan Ringan", icon: "🌦️" };
+      if (WS > 10.8) return { label: "Berangin", icon: "🌬️" };
       if (T > 30 && RH >= 70) return { label: "Panas Lembap", icon: "🥵" };
-
-      // 5. Cerah
       if (T > 30 && RH < 60) return { label: "Cerah", icon: "☀️" };
-
-      // 6. Berawan Tebal
       if (RH >= 75 && T < 27) return { label: "Berawan Tebal", icon: "☁️" };
-
-      // 7. Berawan
       if (T >= 25 && T <= 30 && RH >= 60 && RH <= 85) return { label: "Berawan", icon: "⛅" };
 
-      // 8. Lainnya
       return { label: "Lainnya", icon: "🌫️" };
     }
 
-    /* ===========================
-       UI COMPONENTS (Parameter Cards)
-    =========================== */
-    function parameterBlockFeatured(labelId, labelHuman, valueStr, unit, englishHint) {
+    function parameterBlockFeatured(labelHuman, valueStr, unit) {
       return `
         <div class="text-center">
           <p class="text-xs text-white/90 mb-1">${labelHuman}</p>
           <p class="text-lg font-bold">${valueStr} ${unit}</p>
-          <p class="text-[10px] text-white/70">${englishHint}</p>
         </div>
       `;
     }
@@ -183,16 +149,9 @@
       `;
     }
 
-    /* ===========================
-       RENDER FEATURED CARD (hari pertama)
-    =========================== */
     function renderFeaturedCard(item) {
       const wx = classifyWeather(item);
       const { hari, tanggal } = splitHariTanggal(item.date);
-
-      const rhVal = `${safeFixed(item.humidity_percent, 0)}`;
-      const psVal = `${safeFixed(item.pressure_hpa, 0)}`;
-      const wsVal = `${safeFixed(item.wind_speed_kmh, 1)}`;
 
       return `
         <div class="rounded-2xl shadow-lg overflow-hidden">
@@ -209,17 +168,14 @@
                 <div class="text-center text-white">
                   <p class="text-4xl font-bold">${safeFixed(item.temperature_c, 1)}°C</p>
                   <p class="text-white/90 text-sm -mt-1">${wx.label}</p>
-                  <p class="text-white/70 text-xs mt-2">
-                    Suhu Udara • Temperature 
-                  </p>
                 </div>
               </div>
 
               <div class="bg-white/15 rounded-xl p-4 text-white min-w-[320px]">
                 <div class="grid grid-cols-3 gap-4 text-center">
-                  ${parameterBlockFeatured("RH2M", "Kelembapan Udara", rhVal, "%", "Relative Humidity")}
-                  ${parameterBlockFeatured("PS", "Tekanan Udara", psVal, "hPa", "Surface Pressure")}
-                  ${parameterBlockFeatured("WS2M", "Kecepatan Angin", wsVal, "km/h", "Wind Speed")}
+                  ${parameterBlockFeatured("Kelembapan", safeFixed(item.humidity_percent, 0), "%")}
+                  ${parameterBlockFeatured("Tekanan", safeFixed(item.pressure_hpa, 0), "hPa")}
+                  ${parameterBlockFeatured("Angin", safeFixed(item.wind_speed_kmh, 1), "km/h")}
                 </div>
               </div>
 
@@ -229,9 +185,6 @@
       `;
     }
 
-    /* ===========================
-       RENDER SMALL CARD (hari ke-2 s/d ke-7)
-    =========================== */
     function renderSmallCard(item) {
       const wx = classifyWeather(item);
       const { hari, tanggal } = splitHariTanggal(item.date);
@@ -250,72 +203,50 @@
             <div>
               <p class="text-2xl font-bold text-primary">${safeFixed(item.temperature_c, 1)}°C</p>
               <p class="text-sm text-gray-600">${wx.label}</p>
-              <p class="text-xs text-gray-500 mt-1">
-                Suhu Udara 
-              </p>
             </div>
 
-            <div class="flex flex-col gap-2 min-w-[150px]">
-              ${parameterBlockSmall("💧", "Kelembapan", `${safeFixed(item.humidity_percent, 0)} %`)}
-              ${parameterBlockSmall("📈", "Tekanan Udara", `${safeFixed(item.pressure_hpa, 0)} hPa`)}
-              ${parameterBlockSmall("🌬️", "Kecepatan Angin", `${safeFixed(item.wind_speed_kmh, 1)} km/h`)}
+            <div class="flex flex-col gap-2 min-w-[160px]">
+              ${parameterBlockSmall("💧", "RH", `${safeFixed(item.humidity_percent, 0)} %`)}
+              ${parameterBlockSmall("📈", "PS", `${safeFixed(item.pressure_hpa, 0)} hPa`)}
+              ${parameterBlockSmall("🌬️", "WS", `${safeFixed(item.wind_speed_kmh, 1)} km/h`)}
             </div>
           </div>
         </div>
       `;
     }
 
-    /* ===========================
-       RENDER EVALUATION CARD
-    =========================== */
     function renderEvaluationCard(item) {
-  return `
-    <div class="p-4 bg-gray-50 border rounded-lg text-center">
-      <h3 class="font-semibold text-primary mb-1">
-        ${String(item.parameter || "").toUpperCase()}
-      </h3>
-      <p class="text-sm">MSE: ${safeFixed(item.MSE, 3)}</p>
-      <p class="text-sm">RMSE: ${safeFixed(item.RMSE, 3)}</p>
-      <p class="text-sm">MAE: ${safeFixed(item.MAE, 3)}</p>
-      <p class="text-sm font-bold">R²: ${safeFixed(item.R2, 3)}</p>
-      <p class="text-[10px] text-gray-400 mt-2">Eval date: ${item.eval_date || "-"}</p>
-    </div>
-  `;
-}
+      return `
+        <div class="p-4 bg-gray-50 border rounded-lg text-center">
+          <h3 class="font-semibold text-primary mb-1">
+            ${String(item.parameter || "").toUpperCase()}
+          </h3>
+          <p class="text-sm">MSE: ${safeFixed(item.MSE, 3)}</p>
+          <p class="text-sm">RMSE: ${safeFixed(item.RMSE, 3)}</p>
+          <p class="text-sm">MAE: ${safeFixed(item.MAE, 3)}</p>
+          <p class="text-sm font-bold">R²: ${safeFixed(item.R2, 3)}</p>
+          <p class="text-[10px] text-gray-400 mt-2">
+            Eval date: ${item.eval_date || "-"}
+          </p>
+        </div>
+      `;
+    }
 
-
-    /* ===========================
-       FETCH DATA
-    =========================== */
     async function loadData() {
       try {
-        // FORECAST
         const forecastRes = await fetch(FORECAST_ENDPOINT);
         const forecastData = await forecastRes.json();
         const sevenDays = forecastData.slice(0, 7);
 
-        if (!sevenDays.length) throw new Error("Forecast kosong");
-
-        // Featured (hari pertama)
         featuredEl.innerHTML = renderFeaturedCard(sevenDays[0]);
+        forecastGrid.innerHTML = sevenDays.slice(1).map(renderSmallCard).join("");
 
-        // Grid (6 hari berikutnya)
-        forecastGrid.innerHTML = sevenDays
-          .slice(1)
-          .map(renderSmallCard)
-          .join("");
-
-        // EVALUATION
         const evalRes = await fetch(EVALUATION_ENDPOINT);
         const evalData = await evalRes.json();
-
-        evalCards.innerHTML = evalData
-          .map(renderEvaluationCard)
-          .join("");
-
+        evalCards.innerHTML = evalData.map(renderEvaluationCard).join("");
         evalSection.classList.remove("hidden");
-        loadingEl.classList.add("hidden");
 
+        loadingEl.classList.add("hidden");
       } catch (err) {
         console.error(err);
         loadingEl.classList.add("hidden");
