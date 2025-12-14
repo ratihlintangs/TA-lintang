@@ -21,7 +21,6 @@ TARGET_COLUMNS = [
 # Lokasi file model berada di direktori induk (backend/)
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "..")
 
-
 class PredictService:
     """
     Layanan yang bertanggung jawab untuk memuat model, melakukan prediksi rekursif,
@@ -237,3 +236,5 @@ class PredictService:
             )
 
         return final_forecast_list
+
+

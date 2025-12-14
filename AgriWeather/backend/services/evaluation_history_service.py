@@ -1,3 +1,4 @@
+import os
 import datetime
 from typing import List, Dict, Any, Optional
 
@@ -9,11 +10,14 @@ from fastapi import HTTPException
 from backend.database import load_data_from_db
 from backend.models import EvaluationHistoryModel
 
-from backend.services.predict_service import PredictService
+MODEL_MODE = os.getenv("AGRI_MODEL_MODE", "v2").strip().lower()
+if MODEL_MODE == "v1":
+    from backend.services.predict_service_v1 import PredictService
+else:
+    from backend.services.predict_service_v2 import PredictService
 
 
 def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-    # handle kosong
     if len(y_true) == 0:
         return {"mse": np.nan, "rmse": np.nan, "mae": np.nan, "r2": np.nan}
 
@@ -21,12 +25,76 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
     rmse = float(np.sqrt(mse))
     mae = float(np.mean(np.abs(y_true - y_pred)))
 
-    # R2 manual (hindari sklearn dependency)
     ss_res = float(np.sum((y_true - y_pred) ** 2))
     ss_tot = float(np.sum((y_true - float(np.mean(y_true))) ** 2))
     r2 = float(1 - ss_res / ss_tot) if ss_tot != 0 else np.nan
 
     return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+
+
+# ========= helpers (independen dari PredictService private methods) =========
+
+def _numeric_clean(df: pd.DataFrame, col: str) -> pd.Series:
+    s = df[col].copy()
+    s = s.replace("-", np.nan)
+    s = pd.to_numeric(s, errors="coerce")
+    return s
+
+
+def _abs_smooth_tail_30(df_hist: pd.DataFrame, target_col: str) -> List[float]:
+    """
+    Ambil 30 nilai terakhir dari seri ABS yang sudah smoothing rolling window=3 center=True.
+    Ini dipakai untuk model absolute (v1) dan juga sebagai base reconstruct delta.
+    """
+    df = df_hist.copy()
+    df[target_col] = _numeric_clean(df, target_col)
+    df = df.dropna(subset=["date", target_col]).sort_values("date")
+
+    smooth_col = f"{target_col}_smooth"
+    df[smooth_col] = df[target_col].rolling(window=3, center=True).mean()
+    df = df.dropna(subset=[smooth_col])
+
+    series = df[smooth_col].reset_index(drop=True)
+    if len(series) < 30:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Data historis tidak cukup untuk {target_col} (smooth abs={len(series)}), butuh minimal 30.",
+        )
+    return series.tail(30).tolist()
+
+
+def _delta_tail_30_from_abs_smooth(df_hist: pd.DataFrame, target_col: str) -> List[float]:
+    """
+    Bangun delta dari abs_smooth.diff(), lalu ambil 30 delta terakhir.
+    """
+    abs_30_plus = _abs_smooth_tail_30(df_hist, target_col)
+    # abs_30_plus itu hanya 30 poin terakhir, delta butuh 31 poin untuk punya 30 delta,
+    # jadi kita ambil dari full series agar benar.
+    df = df_hist.copy()
+    df[target_col] = _numeric_clean(df, target_col)
+    df = df.dropna(subset=["date", target_col]).sort_values("date")
+
+    smooth_col = f"{target_col}_smooth"
+    df[smooth_col] = df[target_col].rolling(window=3, center=True).mean()
+    df = df.dropna(subset=[smooth_col])
+
+    abs_series = df[smooth_col].reset_index(drop=True)
+    delta_series = abs_series.diff().dropna().reset_index(drop=True)
+
+    if len(delta_series) < 30:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Data historis tidak cukup untuk {target_col} (delta={len(delta_series)}), butuh minimal 30.",
+        )
+    return delta_series.tail(30).tolist()
+
+
+def _season_features(current_date: datetime.date):
+    dayofyear = current_date.timetuple().tm_yday
+    sin_day = float(np.sin(2 * np.pi * dayofyear / 365.25))
+    cos_day = float(np.cos(2 * np.pi * dayofyear / 365.25))
+    is_weekday = 1 if current_date.weekday() < 5 else 0
+    return sin_day, cos_day, is_weekday
 
 
 class EvaluationHistoryService:
@@ -37,48 +105,36 @@ class EvaluationHistoryService:
     def __init__(self):
         self.predict_service = PredictService()
 
-    def _generate_forecast_as_of(self, db: Session, as_of_date: datetime.date, days_ahead: int = 7) -> List[Dict[str, Any]]:
+    def _generate_forecast_as_of(
+        self,
+        db: Session,
+        as_of_date: datetime.date,
+        days_ahead: int = 7
+    ) -> List[Dict[str, Any]]:
         """
-        Prediksi 7 hari ke depan dengan asumsi 'hari terakhir observasi' = as_of_date.
-        NOTE: Ini mirip PredictService yang kamu punya, tapi outputnya harus mulai as_of_date+1,
-              bukan 'today'. Jadi kita lakukan trick: sementara set 'today' = as_of_date+1
-              dengan cara memanggil versi predict_service yang sudah ada, tetapi kita butuh
-              kontrol output date.
-
-        Solusi paling simpel & aman:
-        - Ambil semua data dari DB
-        - Pakai mekanisme model yang sama, tapi kita "potong" data sampai as_of_date
-        - Jalankan prediksi rekursif untuk days_ahead mulai as_of_date+1
+        Forecast mulai as_of_date+1 sampai as_of_date+days_ahead.
+        Support hybrid:
+        - delta: temperature & humidity (reconstruct abs)
+        - absolute: pressure & wind_speed (abs)
         """
-        # load data full
         df_raw = load_data_from_db(db)
         if df_raw.empty:
             raise HTTPException(status_code=404, detail="Data historis kosong dari database.")
 
-        # rapiin
         df_raw["date"] = pd.to_datetime(df_raw["date"], errors="coerce")
         df_raw = df_raw.dropna(subset=["date"]).sort_values("date")
 
-        # potong histori sampai as_of_date
         df_hist = df_raw[df_raw["date"].dt.date <= as_of_date].copy()
         if df_hist.empty:
             raise HTTPException(status_code=404, detail=f"Tidak ada data historis <= {as_of_date}")
 
-        # Kita “re-use” internal predict logic dengan memanggil fungsi private-nya secara aman:
-        # Cara paling aman tanpa refactor besar: kita bikin instance baru sementara dan pakai
-        # metode public generate_weather_prediction, tetapi kita butuh start dari as_of_date+1.
-        #
-        # Jadi kita buat forecast manual di sini untuk 4 target dengan memanggil helper di PredictService.
         ps = self.predict_service
-
-        # target columns harus sama dengan predict_service
         target_cols = ["temperature", "humidity", "pressure", "wind_speed"]
 
         base_start_date = as_of_date + datetime.timedelta(days=1)
         forecast_dates = [base_start_date + datetime.timedelta(days=i) for i in range(days_ahead)]
         forecast_results = pd.DataFrame({"date": pd.to_datetime(forecast_dates)})
 
-        # ambil aset model dari PredictService
         for target_col in target_cols:
             assets = ps.model_assets.get(target_col)
             if not assets:
@@ -87,36 +143,49 @@ class EvaluationHistoryService:
             model = assets["model"]
             scaler_X = assets["scaler_X"]
             scaler_y = assets["scaler_y"]
+            model_type = assets.get("type", "absolute")
 
-            # gunakan helper smoothing + ambil 30 nilai terakhir (dari histori yg dipotong)
-            historic_values = ps._prepare_initial_data(df_hist, target_col)
+            preds_abs: List[float] = []
 
-            preds = []
+            if model_type == "delta":
+                # historic_abs untuk base reconstruct + historic_delta untuk lag
+                historic_abs = _abs_smooth_tail_30(df_hist, target_col)
+                historic_delta = _delta_tail_30_from_abs_smooth(df_hist, target_col)
+            else:
+                # absolute model: gunakan abs smooth tail 30
+                historic_abs = _abs_smooth_tail_30(df_hist, target_col)
+
             for i in range(days_ahead):
                 current_date = forecast_dates[i]
+                sin_day, cos_day, is_weekday = _season_features(current_date)
 
-                lag_7 = historic_values[-7]
-                lag_14 = historic_values[-14]
-                lag_30 = historic_values[-30]
-
-                dayofyear = current_date.timetuple().tm_yday
-                sin_day = np.sin(2 * np.pi * dayofyear / 365.25)
-                cos_day = np.cos(2 * np.pi * dayofyear / 365.25)
-                dayofweek = current_date.weekday()
-                is_weekday = 1 if dayofweek < 5 else 0
+                if model_type == "delta":
+                    lag_7 = historic_delta[-7]
+                    lag_14 = historic_delta[-14]
+                    lag_30 = historic_delta[-30]
+                else:
+                    lag_7 = historic_abs[-7]
+                    lag_14 = historic_abs[-14]
+                    lag_30 = historic_abs[-30]
 
                 X_input = np.array([[lag_7, lag_14, lag_30, sin_day, cos_day, is_weekday]])
                 X_scaled = scaler_X.transform(X_input)
                 y_scaled_pred = model.predict(X_scaled)
                 y_pred = scaler_y.inverse_transform(y_scaled_pred.reshape(-1, 1))[0][0]
-
                 y_pred = float(y_pred)
-                preds.append(round(y_pred, 2))
-                historic_values.append(y_pred)
 
-            forecast_results[target_col] = preds
+                if model_type == "delta":
+                    # reconstruct abs
+                    new_abs = float(historic_abs[-1]) + y_pred
+                    preds_abs.append(round(new_abs, 2))
+                    historic_abs.append(new_abs)
+                    historic_delta.append(y_pred)
+                else:
+                    preds_abs.append(round(y_pred, 2))
+                    historic_abs.append(y_pred)
 
-        # format output sama dengan API forecast kamu
+            forecast_results[target_col] = preds_abs
+
         out = []
         for _, row in forecast_results.iterrows():
             out.append({
@@ -137,14 +206,13 @@ class EvaluationHistoryService:
         horizon_days: int = 7,
         overwrite: bool = False
     ) -> Dict[str, Any]:
-        """
-        Jalankan rolling evaluation dari start_date..end_date, tiap step_days.
-        Simpan ke tabel evaluation_history.
-        """
         if end_date < start_date:
             raise HTTPException(status_code=400, detail="end_date harus >= start_date")
+        if step_days < 1:
+            raise HTTPException(status_code=400, detail="step_days minimal 1")
+        if horizon_days < 1:
+            raise HTTPException(status_code=400, detail="horizon_days minimal 1")
 
-        # load semua data sekali untuk ambil aktual
         df_all = load_data_from_db(db)
         if df_all.empty:
             raise HTTPException(status_code=404, detail="Data historis kosong dari database.")
@@ -162,15 +230,14 @@ class EvaluationHistoryService:
 
         created = 0
         skipped = 0
-        eval_dates = []
 
+        eval_dates = []
         cur = start_date
         while cur <= end_date:
             eval_dates.append(cur)
             cur = cur + datetime.timedelta(days=step_days)
 
         for as_of in eval_dates:
-            # cek apakah sudah ada
             existing = db.query(EvaluationHistoryModel).filter(
                 EvaluationHistoryModel.eval_date == as_of,
                 EvaluationHistoryModel.horizon_days == horizon_days,
@@ -186,22 +253,18 @@ class EvaluationHistoryService:
                     EvaluationHistoryModel.horizon_days == horizon_days,
                 ).delete()
 
-            # prediksi 7 hari setelah as_of
             preds = self._generate_forecast_as_of(db, as_of_date=as_of, days_ahead=horizon_days)
             pred_df = pd.DataFrame(preds)
             pred_df["d"] = pd.to_datetime(pred_df["date"]).dt.date
 
-            # ambil aktual dari DB untuk horizon tersebut
             actual_start = as_of + datetime.timedelta(days=1)
             actual_end = as_of + datetime.timedelta(days=horizon_days)
 
             actual_df = df_all[(df_all["d"] >= actual_start) & (df_all["d"] <= actual_end)].copy()
             if actual_df.empty:
-                # tidak ada aktual, skip
                 skipped += 1
                 continue
 
-            # join on date
             merged = pd.merge(
                 pred_df,
                 actual_df,
@@ -211,17 +274,24 @@ class EvaluationHistoryService:
                 suffixes=("_pred", "_act"),
             )
 
-            # hitung metric per parameter
+            # pastikan horizon lengkap
+            if merged["d"].nunique() < horizon_days:
+                skipped += 1
+                continue
+
             for param, (api_key, db_col) in params_map.items():
-                # actual col = db_col, pred col = api_key
                 y_true = pd.to_numeric(merged[db_col], errors="coerce")
                 y_pred = pd.to_numeric(merged[api_key], errors="coerce")
 
                 mask = (~y_true.isna()) & (~y_pred.isna())
-                y_true = y_true[mask].to_numpy(dtype=float)
-                y_pred = y_pred[mask].to_numpy(dtype=float)
+                y_true_arr = y_true[mask].to_numpy(dtype=float)
+                y_pred_arr = y_pred[mask].to_numpy(dtype=float)
 
-                m = _metrics(y_true, y_pred)
+                if len(y_true_arr) == 0:
+                    skipped += 1
+                    continue
+
+                m = _metrics(y_true_arr, y_pred_arr)
 
                 rec = EvaluationHistoryModel(
                     eval_date=as_of,
@@ -231,7 +301,7 @@ class EvaluationHistoryService:
                     rmse=m["rmse"],
                     mae=m["mae"],
                     r2=m["r2"],
-                    n_samples=int(len(y_true)),
+                    n_samples=int(len(y_true_arr)),
                 )
                 db.add(rec)
                 created += 1
@@ -240,6 +310,7 @@ class EvaluationHistoryService:
 
         return {
             "status": "ok",
+            "model_mode": MODEL_MODE,
             "start_date": str(start_date),
             "end_date": str(end_date),
             "step_days": step_days,
