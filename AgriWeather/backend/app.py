@@ -1,9 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
+from fastapi.responses import FileResponse, JSONResponse
+from pathlib import Path
 
 from backend.database import Base, engine
 from backend.routers import weather, predict
@@ -26,7 +26,6 @@ async def lifespan(app_: FastAPI):
     print("INFO: Aplikasi FastAPI dimatikan.")
 
 
-# ✅ variabel bernama `app` harus ada di level module
 app = FastAPI(
     title="AgriWeather API",
     description="API untuk prediksi cuaca pertanian.",
@@ -34,60 +33,66 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ======= PATHS (AMAN, ABSOLUT) =======
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))        # .../AgriWeather/backend
-STATIC_DIR = os.path.join(BASE_DIR, "static")                # .../AgriWeather/backend/static
-INDEX_FILE = os.path.join(STATIC_DIR, "index.html")
+# ===================== PATHS =====================
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+INDEX_FILE = STATIC_DIR / "index.html"
+MANIFEST_FILE = STATIC_DIR / "manifest.json"
+ICON_192 = STATIC_DIR / "icons" / "icon-192.png"
 
-
-# ======= CORS (opsional) =======
-# Kalau frontend kamu diserve dari FastAPI yang sama (root /),
-# biasanya CORS tidak diperlukan. Tapi tetap aman disiapkan.
-origins = [
-    "http://localhost",
-    "http://127.0.0.1",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    # Tambahkan origin LAN kamu jika perlu (contoh):
-    # "http://192.168.1.10:8000",
-]
-
+# ===================== CORS =====================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ======= ROUTERS (API) =======
+# ===================== ROUTERS =====================
 app.include_router(weather.router)
 app.include_router(predict.router)
 app.include_router(evaluation_history_router)
 
-# ======= STATIC (PWA assets) =======
-# Pastikan folder backend/static memang ada.
-if not os.path.isdir(STATIC_DIR):
+# ===================== STATIC =====================
+if not STATIC_DIR.is_dir():
     raise RuntimeError(
         f"Static directory not found: {STATIC_DIR}\n"
         f"Pastikan folder 'backend/static' ada dan berisi index.html, manifest.json, icons/"
     )
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# ===================== ROOT =====================
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+def serve_index(request: Request):
+    if INDEX_FILE.is_file():
+        return FileResponse(str(INDEX_FILE))
+    return JSONResponse(
+        status_code=500,
+        content={"message": "index.html tidak ditemukan. Pastikan ada di backend/static/index.html"},
+    )
 
-# ======= WEB ROOT (PWA entry) =======
-# Root "/" akan serve index.html agar PWA bisa dibuka sebagai web-app.
-@app.get("/", include_in_schema=False)
-def serve_index():
-    if os.path.isfile(INDEX_FILE):
-        return FileResponse(INDEX_FILE)
-    return {
-        "message": "index.html tidak ditemukan. Pastikan ada di backend/static/index.html"
-    }
+# ===================== MANIFEST =====================
+@app.api_route("/manifest.json", methods=["GET", "HEAD"], include_in_schema=False)
+def serve_manifest_json():
+    if MANIFEST_FILE.is_file():
+        return FileResponse(str(MANIFEST_FILE), media_type="application/manifest+json")
+    return JSONResponse(status_code=404, content={"message": "manifest.json tidak ditemukan"})
 
+@app.api_route("/manifest.webmanifest", methods=["GET", "HEAD"], include_in_schema=False)
+def serve_manifest_webmanifest():
+    if MANIFEST_FILE.is_file():
+        return FileResponse(str(MANIFEST_FILE), media_type="application/manifest+json")
+    return JSONResponse(status_code=404, content={"message": "manifest.json tidak ditemukan"})
 
-# (Opsional) healthcheck ringan
+# ===================== FAVICON =====================
+@app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
+def favicon():
+    if ICON_192.is_file():
+        return FileResponse(str(ICON_192))
+    return JSONResponse(status_code=404, content={"message": "favicon not found"})
+
 @app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok"}
